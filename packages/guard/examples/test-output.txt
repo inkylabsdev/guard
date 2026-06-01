@@ -1,0 +1,5 @@
+PASSED test_login
+PASSED test_logout
+FAILED test_register: AssertionError: expected 201, got 500
+PASSED test_profile
+FAILED test_delete_account: TimeoutError after 30s
