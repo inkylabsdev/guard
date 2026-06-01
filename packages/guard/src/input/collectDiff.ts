@@ -13,9 +13,10 @@ export async function collectDiff(cwd: string): Promise<GuardTarget> {
     gitText(cwd, ['diff', '--cached']),
   ])
 
+  const root = repoRoot ?? cwd
   const paths = [...new Set([...unstagedNames, ...stagedNames])].filter(Boolean)
   const files: GuardFile[] = paths
-    .map((p) => (repoRoot ? join(repoRoot, p) : p))
+    .map((p) => join(root, p))
     .filter((p) => existsSync(p))
     .map((p) => ({ path: p, content: readFileSync(p, 'utf8') }))
 

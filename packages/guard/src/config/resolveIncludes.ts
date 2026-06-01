@@ -16,8 +16,7 @@ function resolveUrl(inc: GuardInclude): string | null {
     process.stderr.write(`warn: unknown include format: ${inc}\n`)
     return null
   }
-  if ('github' in inc) return githubRawUrl(inc)
-  return null
+  return githubRawUrl(inc)
 }
 
 export async function resolveIncludes(includes: GuardInclude[]): Promise<string> {

@@ -63,4 +63,48 @@ describe('formatReport', () => {
     const report = formatReport(result, target, '/repo/GUARD.md')
     expect(report).toContain('stdin')
   })
+
+  it('shows diff mode with singular file count', () => {
+    const result: LLMEvaluateResult = { summary: 'ok', findings: [], passed: true }
+    const target: GuardTarget = { mode: 'diff', files: [{ path: 'a.ts', content: '' }] }
+    const report = formatReport(result, target, '/repo/GUARD.md')
+    expect(report).toContain('1 changed file (diff)')
+  })
+
+  it('shows finding with file, line, and suggestion', () => {
+    const result: LLMEvaluateResult = {
+      summary: 'issues',
+      findings: [{
+        severity: 'warning',
+        rule: 'empty-catch',
+        file: 'src/foo.ts',
+        line: 42,
+        message: 'Do not swallow errors.',
+        suggestion: 'Log or rethrow.',
+      }],
+      passed: false,
+    }
+    const target: GuardTarget = { mode: 'files', files: [] }
+    const report = formatReport(result, target, '/repo/GUARD.md')
+    expect(report).toContain('src/foo.ts:42')
+    expect(report).toContain('Suggestion:')
+    expect(report).toContain('Log or rethrow.')
+    expect(report).toContain('0 errors, 1 warning, 0 info')
+  })
+
+  it('counts multiple severity levels correctly', () => {
+    const result: LLMEvaluateResult = {
+      summary: 'issues',
+      findings: [
+        { severity: 'error', message: 'e1' },
+        { severity: 'warning', message: 'w1' },
+        { severity: 'info', message: 'i1' },
+        { severity: 'info', message: 'i2' },
+      ],
+      passed: false,
+    }
+    const target: GuardTarget = { mode: 'files', files: [] }
+    const report = formatReport(result, target, '/repo/GUARD.md')
+    expect(report).toContain('1 error, 1 warning, 2 info')
+  })
 })

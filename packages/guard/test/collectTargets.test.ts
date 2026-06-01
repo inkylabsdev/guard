@@ -1,9 +1,10 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { writeFileSync, mkdirSync, rmSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
 import { Readable } from 'stream'
 import { collectTargets } from '../src/input/collectTargets.js'
+import { collectFiles } from '../src/input/collectFiles.js'
 import { collectStdin } from '../src/input/collectStdin.js'
 
 describe('collectTargets', () => {
@@ -52,6 +53,48 @@ describe('collectTargets', () => {
     const target = await collectTargets({ args: [`@${listFile}`], cwd: dir })
     expect(target.files).toHaveLength(1)
   })
+
+  it('routes --stdin to collectStdin', async () => {
+    const target = await collectTargets({ stdin: true, args: [], cwd: dir })
+    expect(target.mode).toBe('stdin')
+  })
+
+  it('warns when @ file list does not exist', async () => {
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    const target = await collectTargets({ args: ['@nonexistent.txt'], cwd: dir })
+    expect(target.files).toHaveLength(0)
+    expect(stderrSpy.mock.calls.map((c) => c[0]).join('')).toContain('file list not found')
+    stderrSpy.mockRestore()
+  })
+})
+
+describe('collectFiles', () => {
+  let dir: string
+
+  beforeEach(() => {
+    dir = join(tmpdir(), `guard-files-${Date.now()}`)
+    mkdirSync(dir, { recursive: true })
+  })
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('expands glob patterns', async () => {
+    writeFileSync(join(dir, 'a.ts'), 'a')
+    writeFileSync(join(dir, 'b.ts'), 'b')
+    writeFileSync(join(dir, 'c.js'), 'c')
+    const files = await collectFiles([`${dir}/*.ts`], dir)
+    expect(files).toHaveLength(2)
+    expect(files.every((f) => f.path.endsWith('.ts'))).toBe(true)
+  })
+
+  it('deduplicates files matched by multiple patterns', async () => {
+    writeFileSync(join(dir, 'a.ts'), 'a')
+    const abs = join(dir, 'a.ts')
+    const files = await collectFiles([abs, abs], dir)
+    expect(files).toHaveLength(1)
+  })
 })
 
 describe('collectStdin', () => {
@@ -67,5 +110,11 @@ describe('collectStdin', () => {
     const stream = Readable.from([])
     const target = await collectStdin(stream)
     expect(target.raw).toBe('')
+  })
+
+  it('handles Buffer chunks', async () => {
+    const stream = Readable.from([Buffer.from('buf')])
+    const target = await collectStdin(stream)
+    expect(target.raw).toBe('buf')
   })
 })

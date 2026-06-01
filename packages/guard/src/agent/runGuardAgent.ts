@@ -11,7 +11,7 @@ export async function runGuardAgent(
   const systemPrompt = buildSystemPrompt()
 
   const allFindings: GuardFinding[] = []
-  let lastResult: LLMEvaluateResult | null = null
+  let summary = ''
 
   for (let i = 1; i <= config.max_iterations; i++) {
     const result = await provider.evaluate({
@@ -22,7 +22,7 @@ export async function runGuardAgent(
       iteration: i,
     })
 
-    lastResult = result
+    summary = result.summary
     for (const f of result.findings) {
       if (!allFindings.some((existing) => existing.rule === f.rule && existing.message === f.message)) {
         allFindings.push(f)
@@ -33,7 +33,7 @@ export async function runGuardAgent(
   }
 
   return {
-    summary: lastResult?.summary ?? 'No evaluation performed.',
+    summary,
     findings: allFindings,
     passed: allFindings.length === 0,
   }
