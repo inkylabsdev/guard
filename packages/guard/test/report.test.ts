@@ -1,11 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import { computeExitCode } from '../src/report/exitCode.js'
 import { formatReport } from '../src/report/formatReport.js'
-import type { LLMEvaluateResult, GuardTarget } from '../src/types.js'
+import type { GuardEvalResult, GuardTarget } from '../src/types.js'
 
 describe('computeExitCode', () => {
-  const target: GuardTarget = { mode: 'files', files: [] }
-
   it('returns 0 when no findings', () => {
     expect(computeExitCode([], 'info')).toBe(0)
   })
@@ -33,7 +31,7 @@ describe('computeExitCode', () => {
 
 describe('formatReport', () => {
   it('shows PASS when no findings', () => {
-    const result: LLMEvaluateResult = { summary: 'ok', findings: [], passed: true }
+    const result: GuardEvalResult = { summary: 'ok', findings: [], passed: true }
     const target: GuardTarget = { mode: 'files', files: [{ path: 'a.ts', content: '' }] }
     const report = formatReport(result, target, '/repo/GUARD.md')
     expect(report).toContain('PASS')
@@ -42,7 +40,7 @@ describe('formatReport', () => {
   })
 
   it('shows FAIL and findings', () => {
-    const result: LLMEvaluateResult = {
+    const result: GuardEvalResult = {
       summary: 'found issues',
       findings: [{ severity: 'error', rule: 'secret-leak', message: 'Do not log secrets.', evidence: 'console.log(secret)' }],
       passed: false,
@@ -58,21 +56,21 @@ describe('formatReport', () => {
   })
 
   it('shows stdin mode', () => {
-    const result: LLMEvaluateResult = { summary: 'ok', findings: [], passed: true }
+    const result: GuardEvalResult = { summary: 'ok', findings: [], passed: true }
     const target: GuardTarget = { mode: 'stdin', files: [], raw: 'some text' }
     const report = formatReport(result, target, '/repo/GUARD.md')
     expect(report).toContain('stdin')
   })
 
   it('shows diff mode with singular file count', () => {
-    const result: LLMEvaluateResult = { summary: 'ok', findings: [], passed: true }
+    const result: GuardEvalResult = { summary: 'ok', findings: [], passed: true }
     const target: GuardTarget = { mode: 'diff', files: [{ path: 'a.ts', content: '' }] }
     const report = formatReport(result, target, '/repo/GUARD.md')
     expect(report).toContain('1 changed file (diff)')
   })
 
   it('shows finding with file, line, and suggestion', () => {
-    const result: LLMEvaluateResult = {
+    const result: GuardEvalResult = {
       summary: 'issues',
       findings: [{
         severity: 'warning',
@@ -93,7 +91,7 @@ describe('formatReport', () => {
   })
 
   it('counts multiple severity levels correctly', () => {
-    const result: LLMEvaluateResult = {
+    const result: GuardEvalResult = {
       summary: 'issues',
       findings: [
         { severity: 'error', message: 'e1' },

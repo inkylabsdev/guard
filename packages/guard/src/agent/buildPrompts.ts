@@ -1,10 +1,12 @@
-import type { GuardTarget } from '../types.js'
+import type { UserMessage } from '@earendil-works/pi-ai'
+import type { GuardTarget, ResolvedGuardPolicy } from '../types.js'
 
 export function buildSystemPrompt(): string {
   return [
     'You are Guard, a strict but fair policy checker.',
     'Your job is to evaluate whether the provided content violates any of the listed policies.',
     'Be concise. Only report genuine violations. Do not invent issues.',
+    'Respond with a single fenced ```json ... ``` block containing an object with summary, findings, and passed fields.',
   ].join(' ')
 }
 
@@ -22,9 +24,18 @@ export function buildTargetContent(target: GuardTarget): string {
   return parts.join('\n\n')
 }
 
-export function buildUserPrompt(iteration: number): string {
-  if (iteration === 1) {
-    return 'Please evaluate the content against the policy and report any violations.'
+export function buildInitialUserMessage(policy: ResolvedGuardPolicy, target: GuardTarget): UserMessage {
+  return {
+    role: 'user',
+    content: [
+      'Please evaluate the content against the policy and report any violations.',
+      `=== Policy ===\n${policy.content}`,
+      `=== Content ===\n${buildTargetContent(target)}`,
+    ].filter(Boolean).join('\n\n'),
+    timestamp: Date.now(),
   }
+}
+
+export function buildFollowUpPrompt(): string {
   return 'Review your previous evaluation. Are there any additional violations you may have missed?'
 }

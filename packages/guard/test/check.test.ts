@@ -18,14 +18,14 @@ describe('checkCommand', () => {
   let dir: string
   let stderrSpy: ReturnType<typeof vi.spyOn>
   let stdoutSpy: ReturnType<typeof vi.spyOn>
-  let cwdSpy: ReturnType<typeof vi.spyOn>
+  let _cwdSpy: ReturnType<typeof vi.spyOn>
 
   beforeEach(() => {
     dir = join(tmpdir(), `guard-check-${Date.now()}`)
     mkdirSync(dir, { recursive: true })
     stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
     stdoutSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-    cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue(dir)
+    _cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue(dir)
   })
 
   afterEach(() => {
@@ -47,13 +47,11 @@ describe('checkCommand', () => {
     expect(stderrSpy.mock.calls.map((c) => c[0]).join('')).toContain('no GUARD.md found')
   })
 
-  it('warns when provider is not mock', async () => {
-    const exit = mockExit()
-    writeFileSync(join(dir, 'GUARD.md'), '---\nprovider: openai\n---\n# Policy')
+  it('throws when the configured model is unknown', async () => {
+    writeFileSync(join(dir, 'GUARD.md'), '---\nprovider: openai\nmodel: missing\n---\n# Policy')
     const file = join(dir, 'a.ts')
     writeFileSync(file, 'const x = 1')
-    await expect(checkCommand({ args: [file] })).rejects.toThrow(MockExit)
-    expect(stderrSpy.mock.calls.map((c) => c[0]).join('')).toContain('not yet implemented')
+    await expect(checkCommand({ args: [file] })).rejects.toThrow('Unknown model')
   })
 
   it('exits 0 and prints PASS for clean input', async () => {

@@ -1,7 +1,7 @@
-import { describe, it, expect } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
+import { fauxAssistantMessage, fauxText, fauxToolCall, registerFauxProvider, type FauxProviderRegistration } from '@earendil-works/pi-ai'
 import { runGuardAgent } from '../src/agent/runGuardAgent.js'
-import type { LLMProvider, LLMEvaluateInput, LLMEvaluateResult } from '../src/types.js'
-import type { AgentInput, ResolvedGuardPolicy, GuardConfig } from '../src/types.js'
+import type { GuardConfig, GuardEvalResult, ResolvedGuardPolicy } from '../src/types.js'
 
 const defaultConfig: GuardConfig = {
   model: 'mock',
@@ -17,82 +17,105 @@ const defaultPolicy: ResolvedGuardPolicy = {
   config: defaultConfig,
 }
 
-function makeInput(overrides: Partial<AgentInput> = {}): AgentInput {
-  return {
-    policy: defaultPolicy,
-    target: { mode: 'files', files: [] },
-    config: defaultConfig,
-    ...overrides,
-  }
+let registration: FauxProviderRegistration | undefined
+
+afterEach(() => {
+  registration?.unregister()
+  registration = undefined
+})
+
+function jsonResponse(result: GuardEvalResult) {
+  return fauxAssistantMessage(`\`\`\`json\n${JSON.stringify(result)}\n\`\`\``)
 }
 
-class StaticProvider implements LLMProvider {
-  name = 'static'
-  constructor(private results: LLMEvaluateResult[]) {}
-  private callCount = 0
-  async evaluate(_input: LLMEvaluateInput): Promise<LLMEvaluateResult> {
-    return this.results[Math.min(this.callCount++, this.results.length - 1)]
-  }
+function registerResponses(results: GuardEvalResult[]) {
+  registration = registerFauxProvider()
+  registration.setResponses(results.map(jsonResponse))
+  return registration
 }
 
 describe('runGuardAgent', () => {
-  it('returns pass result when provider passes', async () => {
-    const provider = new StaticProvider([{ summary: 'ok', findings: [], passed: true }])
-    const result = await runGuardAgent(makeInput(), provider)
-    expect(result.passed).toBe(true)
-    expect(result.findings).toHaveLength(0)
+  it('returns pass result on the first turn', async () => {
+    const faux = registerResponses([{ summary: 'ok', findings: [], passed: true }])
+    const result = await runGuardAgent(defaultPolicy, { mode: 'files', files: [] }, defaultConfig, faux.getModel())
+    expect(result).toEqual({ summary: 'ok', findings: [], passed: true })
+    expect(faux.state.callCount).toBe(1)
   })
 
-  it('stops iterating after first pass', async () => {
-    let callCount = 0
-    const provider: LLMProvider = {
-      name: 'counting',
-      async evaluate() {
-        callCount++
-        return { summary: 'ok', findings: [], passed: true }
-      },
-    }
-    await runGuardAgent(makeInput(), provider)
-    expect(callCount).toBe(1)
-  })
-
-  it('runs up to max_iterations when provider keeps failing', async () => {
-    let callCount = 0
-    const provider: LLMProvider = {
-      name: 'always-fail',
-      async evaluate() {
-        callCount++
-        return {
-          summary: 'issue',
-          findings: [{ severity: 'error', message: 'bad' }],
-          passed: false,
-        }
-      },
-    }
-    const config = { ...defaultConfig, max_iterations: 2 }
-    await runGuardAgent(makeInput({ config }), provider)
-    expect(callCount).toBe(2)
-  })
-
-  it('deduplicates findings with same rule and message across iterations', async () => {
+  it('stops early when a later turn passes', async () => {
     const finding = { severity: 'error' as const, rule: 'leak', message: 'secret in logs' }
-    const provider = new StaticProvider([
+    const faux = registerResponses([
       { summary: 'issue', findings: [finding], passed: false },
-      { summary: 'issue', findings: [finding], passed: false },
+      { summary: 'done', findings: [], passed: true },
     ])
-    const config = { ...defaultConfig, max_iterations: 2 }
-    const result = await runGuardAgent(makeInput({ config }), provider)
-    expect(result.findings).toHaveLength(1)
+    const result = await runGuardAgent(defaultPolicy, { mode: 'files', files: [] }, defaultConfig, faux.getModel())
+    expect(result).toEqual({ summary: 'done', findings: [finding], passed: false })
+    expect(faux.state.callCount).toBe(2)
   })
 
-  it('accumulates distinct findings across iterations', async () => {
-    const provider = new StaticProvider([
-      { summary: 'issue', findings: [{ severity: 'error' as const, rule: 'a', message: 'first' }], passed: false },
-      { summary: 'issue', findings: [{ severity: 'warning' as const, rule: 'b', message: 'second' }], passed: false },
+  it('adds the follow-up prompt only after the first turn', async () => {
+    registration = registerFauxProvider()
+    const contexts: string[][] = []
+    registration.setResponses([
+      (context) => {
+        contexts.push(context.messages.map((message) => message.role === 'user' ? String(message.content) : message.role))
+        return jsonResponse({ summary: 'continue', findings: [], passed: false })
+      },
+      (context) => {
+        contexts.push(context.messages.map((message) => message.role === 'user' ? String(message.content) : message.role))
+        return jsonResponse({ summary: 'ok', findings: [], passed: true })
+      },
     ])
+    await runGuardAgent(defaultPolicy, { mode: 'files', files: [] }, defaultConfig, registration.getModel())
+    expect(contexts[0]).toHaveLength(1)
+    expect(contexts[1].at(-1)).toContain('Review your previous evaluation')
+  })
+
+  it('runs up to max_iterations when responses keep failing', async () => {
     const config = { ...defaultConfig, max_iterations: 2 }
-    const result = await runGuardAgent(makeInput({ config }), provider)
-    expect(result.findings).toHaveLength(2)
-    expect(result.passed).toBe(false)
+    const finding = { severity: 'error' as const, message: 'bad' }
+    const faux = registerResponses([
+      { summary: 'issue', findings: [finding], passed: false },
+      { summary: 'issue', findings: [finding], passed: false },
+    ])
+    await runGuardAgent(defaultPolicy, { mode: 'files', files: [] }, config, faux.getModel())
+    expect(faux.state.callCount).toBe(2)
+  })
+
+  it('deduplicates findings with the same rule and message', async () => {
+    const config = { ...defaultConfig, max_iterations: 2 }
+    const finding = { severity: 'error' as const, rule: 'leak', message: 'secret in logs' }
+    const faux = registerResponses([
+      { summary: 'issue', findings: [finding], passed: false },
+      { summary: 'issue', findings: [finding], passed: false },
+    ])
+    const result = await runGuardAgent(defaultPolicy, { mode: 'files', files: [] }, config, faux.getModel())
+    expect(result.findings).toEqual([finding])
+  })
+
+  it('accumulates distinct findings across turns', async () => {
+    const config = { ...defaultConfig, max_iterations: 2 }
+    const first = { severity: 'error' as const, rule: 'a', message: 'first' }
+    const second = { severity: 'warning' as const, rule: 'b', message: 'second' }
+    const faux = registerResponses([
+      { summary: 'issue', findings: [first], passed: false },
+      { summary: 'issue', findings: [second], passed: false },
+    ])
+    const result = await runGuardAgent(defaultPolicy, { mode: 'files', files: [] }, config, faux.getModel())
+    expect(result).toEqual({ summary: 'issue', findings: [first, second], passed: false })
+  })
+
+  it('passes tool results through to the LLM context', async () => {
+    registration = registerFauxProvider()
+    registration.setResponses([
+      fauxAssistantMessage([
+        fauxText('```json\n{"summary":"continue","findings":[],"passed":false}\n```'),
+        fauxToolCall('missing', {}),
+      ]),
+      jsonResponse({ summary: 'ok', findings: [], passed: true }),
+    ])
+    const result = await runGuardAgent(defaultPolicy, { mode: 'files', files: [] }, defaultConfig, registration.getModel())
+    expect(result).toEqual({ summary: 'ok', findings: [], passed: true })
+    expect(registration.state.callCount).toBe(2)
   })
 })

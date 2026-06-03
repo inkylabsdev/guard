@@ -37,22 +37,8 @@ export type ResolvedGuardPolicy = {
   config: GuardConfig
 }
 
-export type LLMEvaluateInput = {
-  systemPrompt: string
-  userPrompt: string
-  policyMarkdown: string
-  targetContent: string
-  iteration: number
-}
-
-export type LLMEvaluateResult = {
+export type GuardEvalResult = {
   summary: string
   findings: GuardFinding[]
   passed: boolean
-}
-
-export type AgentInput = {
-  policy: ResolvedGuardPolicy
-  target: GuardTarget
-  config: GuardConfig
 }

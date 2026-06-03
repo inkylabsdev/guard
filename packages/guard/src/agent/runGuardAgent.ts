@@ -1,36 +1,49 @@
-import type { AgentInput, LLMEvaluateResult, GuardFinding } from '../types.js'
-import type { LLMProvider } from '../providers/LLMProvider.js'
-import { buildSystemPrompt, buildTargetContent, buildUserPrompt } from './buildPrompts.js'
+import type { Api, Model } from '@earendil-works/pi-ai'
+import { runAgentLoop } from '@earendil-works/pi-agent-core'
+import type { GuardConfig, GuardEvalResult, GuardFinding, GuardTarget, ResolvedGuardPolicy } from '../types.js'
+import { buildFollowUpPrompt, buildInitialUserMessage, buildSystemPrompt } from './buildPrompts.js'
+import { parseFindings } from './parseFindings.js'
 
 export async function runGuardAgent(
-  input: AgentInput,
-  provider: LLMProvider,
-): Promise<LLMEvaluateResult> {
-  const { policy, target, config } = input
-  const targetContent = buildTargetContent(target)
-  const systemPrompt = buildSystemPrompt()
-
+  policy: ResolvedGuardPolicy,
+  target: GuardTarget,
+  config: GuardConfig,
+  model: Model<Api>,
+): Promise<GuardEvalResult> {
+  let turnCount = 0
+  // pi-agent-core polls steering once before the first request.
+  let hasCompletedTurn = false
   const allFindings: GuardFinding[] = []
   let summary = ''
 
-  for (let i = 1; i <= config.max_iterations; i++) {
-    const result = await provider.evaluate({
-      systemPrompt,
-      userPrompt: buildUserPrompt(i),
-      policyMarkdown: policy.content,
-      targetContent,
-      iteration: i,
-    })
-
-    summary = result.summary
-    for (const f of result.findings) {
-      if (!allFindings.some((existing) => existing.rule === f.rule && existing.message === f.message)) {
-        allFindings.push(f)
-      }
-    }
-
-    if (result.passed) break
-  }
+  await runAgentLoop(
+    [buildInitialUserMessage(policy, target)],
+    { systemPrompt: buildSystemPrompt(), messages: [], tools: [] },
+    {
+      model,
+      convertToLlm: (messages) =>
+        messages.filter((message) =>
+          message.role === 'user' || message.role === 'assistant' || message.role === 'toolResult'),
+      shouldStopAfterTurn: ({ message }) => {
+        const result = parseFindings(message)
+        summary = result.summary
+        for (const finding of result.findings) {
+          if (!allFindings.some((existing) =>
+            existing.rule === finding.rule && existing.message === finding.message)) {
+            allFindings.push(finding)
+          }
+        }
+        turnCount++
+        hasCompletedTurn = true
+        return result.passed || turnCount >= config.max_iterations
+      },
+      getSteeringMessages: async () =>
+        hasCompletedTurn
+          ? [{ role: 'user', content: buildFollowUpPrompt(), timestamp: Date.now() }]
+          : [],
+    },
+    () => {},
+  )
 
   return {
     summary,

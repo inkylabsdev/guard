@@ -1,5 +1,5 @@
 import chalk from 'chalk'
-import type { LLMEvaluateResult, GuardFinding, GuardTarget } from '../types.js'
+import type { GuardEvalResult, GuardFinding, GuardTarget } from '../types.js'
 
 const SEVERITY_COLOR: Record<GuardFinding['severity'], (s: string) => string> = {
   error: chalk.red,
@@ -8,7 +8,7 @@ const SEVERITY_COLOR: Record<GuardFinding['severity'], (s: string) => string> = 
 }
 
 export function formatReport(
-  result: LLMEvaluateResult,
+  result: GuardEvalResult,
   target: GuardTarget,
   policyPath: string,
 ): string {

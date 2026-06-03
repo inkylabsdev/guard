@@ -1,10 +1,23 @@
 import { describe, it, expect } from 'vitest'
-import { buildSystemPrompt, buildTargetContent, buildUserPrompt } from '../src/agent/buildPrompts.js'
-import type { GuardTarget } from '../src/types.js'
+import { buildFollowUpPrompt, buildInitialUserMessage, buildSystemPrompt, buildTargetContent } from '../src/agent/buildPrompts.js'
+import type { GuardTarget, ResolvedGuardPolicy } from '../src/types.js'
+
+const policy: ResolvedGuardPolicy = {
+  policyPath: '/repo/GUARD.md',
+  content: '# Policy',
+  config: {
+    model: 'mock',
+    provider: 'mock',
+    max_iterations: 3,
+    severity_threshold: 'info',
+    include: [],
+  },
+}
 
 describe('buildSystemPrompt', () => {
   it('returns a non-empty string', () => {
     expect(buildSystemPrompt()).toBeTruthy()
+    expect(buildSystemPrompt()).toContain('```json ... ```')
   })
 })
 
@@ -43,13 +56,22 @@ describe('buildTargetContent', () => {
   })
 })
 
-describe('buildUserPrompt', () => {
-  it('returns first-iteration prompt for iteration 1', () => {
-    expect(buildUserPrompt(1)).toContain('evaluate the content')
+describe('buildInitialUserMessage', () => {
+  it('returns a pi-ai user message with policy and target content', () => {
+    const message = buildInitialUserMessage(policy, {
+      mode: 'files',
+      files: [{ path: 'a.ts', content: 'const x = 1' }],
+    })
+    expect(message.role).toBe('user')
+    expect(message.content).toContain('evaluate the content')
+    expect(message.content).toContain('# Policy')
+    expect(message.content).toContain('const x = 1')
+    expect(message.timestamp).toEqual(expect.any(Number))
   })
+})
 
-  it('returns follow-up prompt for iteration > 1', () => {
-    expect(buildUserPrompt(2)).toContain('Review your previous evaluation')
-    expect(buildUserPrompt(3)).toContain('Review your previous evaluation')
+describe('buildFollowUpPrompt', () => {
+  it('asks for additional violations', () => {
+    expect(buildFollowUpPrompt()).toContain('Review your previous evaluation')
   })
 })

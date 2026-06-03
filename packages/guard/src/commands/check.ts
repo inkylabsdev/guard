@@ -5,7 +5,7 @@ import { resolveLinkedFiles } from '../config/resolveLinkedFiles.js'
 import { resolveIncludes } from '../config/resolveIncludes.js'
 import { collectTargets } from '../input/collectTargets.js'
 import { runGuardAgent } from '../agent/runGuardAgent.js'
-import { MockProvider } from '../providers/MockProvider.js'
+import { createModel } from '../providers/createModel.js'
 import { formatReport } from '../report/formatReport.js'
 import { computeExitCode } from '../report/exitCode.js'
 import type { ResolvedGuardPolicy } from '../types.js'
@@ -33,10 +33,6 @@ export async function checkCommand(opts: CheckCommandOptions): Promise<void> {
   const { config, body } = parseGuardFile(guardPath)
   const guardDir = dirname(guardPath)
 
-  if (config.provider !== 'mock') {
-    process.stderr.write(`warn: provider "${config.provider}" is not yet implemented; using mock\n`)
-  }
-
   const linkedContent = resolveLinkedFiles(body, guardDir)
   const includeContent = await resolveIncludes(config.include)
   const fullContent = [body, linkedContent, includeContent].filter(Boolean).join('\n\n')
@@ -48,11 +44,14 @@ export async function checkCommand(opts: CheckCommandOptions): Promise<void> {
   }
 
   const target = await collectTargets({ ...opts, cwd })
-  const provider = new MockProvider()
-  const result = await runGuardAgent({ policy, target, config }, provider)
+  const handle = createModel(config)
+  try {
+    const result = await runGuardAgent(policy, target, config, handle.model)
+    console.log(formatReport(result, target, guardPath))
 
-  console.log(formatReport(result, target, guardPath))
-
-  const code = computeExitCode(result.findings, config.severity_threshold)
-  process.exit(code)
+    const code = computeExitCode(result.findings, config.severity_threshold)
+    process.exit(code)
+  } finally {
+    handle.cleanup()
+  }
 }
