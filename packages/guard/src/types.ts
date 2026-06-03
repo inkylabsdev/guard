@@ -1,9 +1,12 @@
 export type GuardConfig = {
-  model: string
-  provider: 'openai' | 'anthropic' | 'mock'
-  max_iterations: number
   severity_threshold: 'info' | 'warning' | 'error'
   include: GuardInclude[]
+}
+
+export type RuntimeConfig = {
+  provider: 'openai' | 'anthropic' | 'mock'
+  model: string
+  max_iterations: number
 }
 
 export type GuardInclude =

@@ -7,7 +7,7 @@ import {
   type FauxResponseFactory,
   type Model,
 } from '@earendil-works/pi-ai'
-import type { GuardConfig, GuardFinding, GuardEvalResult } from '../types.js'
+import type { RuntimeConfig, GuardFinding, GuardEvalResult } from '../types.js'
 
 export type ModelHandle = {
   model: Model<Api>
@@ -87,24 +87,24 @@ function requireModel(provider: 'openai' | 'anthropic', modelId: string): Model<
   return model
 }
 
-export function createModel(config: GuardConfig): ModelHandle {
-  if (config.provider === 'mock') {
+export function createModel(runtime: RuntimeConfig): ModelHandle {
+  if (runtime.provider === 'mock') {
     const responseFactory: FauxResponseFactory = (context) =>
       fauxAssistantMessage(`\`\`\`json\n${JSON.stringify(evaluateMockText(extractTargetText(context)))}\n\`\`\``)
     const registration = registerFauxProvider()
-    registration.setResponses(Array.from({ length: config.max_iterations }, () => responseFactory))
+    registration.setResponses(Array.from({ length: runtime.max_iterations }, () => responseFactory))
     return {
       model: registration.getModel(),
       cleanup: () => registration.unregister(),
     }
   }
 
-  if (config.provider === 'openai' || config.provider === 'anthropic') {
+  if (runtime.provider === 'openai' || runtime.provider === 'anthropic') {
     return {
-      model: requireModel(config.provider, config.model),
+      model: requireModel(runtime.provider, runtime.model),
       cleanup: () => {},
     }
   }
 
-  throw new Error(`Unsupported provider "${config.provider}"`)
+  throw new Error(`Unsupported provider "${runtime.provider}"`)
 }

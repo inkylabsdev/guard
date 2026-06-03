@@ -1,12 +1,15 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { fauxAssistantMessage, fauxText, fauxToolCall, registerFauxProvider, type FauxProviderRegistration } from '@earendil-works/pi-ai'
 import { runGuardAgent } from '../src/agent/runGuardAgent.js'
-import type { GuardConfig, GuardEvalResult, ResolvedGuardPolicy } from '../src/types.js'
+import type { GuardConfig, RuntimeConfig, GuardEvalResult, ResolvedGuardPolicy } from '../src/types.js'
 
-const defaultConfig: GuardConfig = {
-  model: 'mock',
+const defaultRuntime: RuntimeConfig = {
   provider: 'mock',
+  model: 'mock',
   max_iterations: 3,
+}
+
+const defaultGuardConfig: GuardConfig = {
   severity_threshold: 'info',
   include: [],
 }
@@ -14,7 +17,7 @@ const defaultConfig: GuardConfig = {
 const defaultPolicy: ResolvedGuardPolicy = {
   policyPath: '/fake/GUARD.md',
   content: '# Policy',
-  config: defaultConfig,
+  config: defaultGuardConfig,
 }
 
 let registration: FauxProviderRegistration | undefined
@@ -37,7 +40,7 @@ function registerResponses(results: GuardEvalResult[]) {
 describe('runGuardAgent', () => {
   it('returns pass result on the first turn', async () => {
     const faux = registerResponses([{ summary: 'ok', findings: [], passed: true }])
-    const result = await runGuardAgent(defaultPolicy, { mode: 'files', files: [] }, defaultConfig, faux.getModel())
+    const result = await runGuardAgent(defaultPolicy, { mode: 'files', files: [] }, defaultRuntime, faux.getModel())
     expect(result).toEqual({ summary: 'ok', findings: [], passed: true })
     expect(faux.state.callCount).toBe(1)
   })
@@ -48,7 +51,7 @@ describe('runGuardAgent', () => {
       { summary: 'issue', findings: [finding], passed: false },
       { summary: 'done', findings: [], passed: true },
     ])
-    const result = await runGuardAgent(defaultPolicy, { mode: 'files', files: [] }, defaultConfig, faux.getModel())
+    const result = await runGuardAgent(defaultPolicy, { mode: 'files', files: [] }, defaultRuntime, faux.getModel())
     expect(result).toEqual({ summary: 'done', findings: [finding], passed: false })
     expect(faux.state.callCount).toBe(2)
   })
@@ -66,13 +69,13 @@ describe('runGuardAgent', () => {
         return jsonResponse({ summary: 'ok', findings: [], passed: true })
       },
     ])
-    await runGuardAgent(defaultPolicy, { mode: 'files', files: [] }, defaultConfig, registration.getModel())
+    await runGuardAgent(defaultPolicy, { mode: 'files', files: [] }, defaultRuntime, registration.getModel())
     expect(contexts[0]).toHaveLength(1)
     expect(contexts[1].at(-1)).toContain('Review your previous evaluation')
   })
 
   it('runs up to max_iterations when responses keep failing', async () => {
-    const config = { ...defaultConfig, max_iterations: 2 }
+    const config = { ...defaultRuntime, max_iterations: 2 }
     const finding = { severity: 'error' as const, message: 'bad' }
     const faux = registerResponses([
       { summary: 'issue', findings: [finding], passed: false },
@@ -83,7 +86,7 @@ describe('runGuardAgent', () => {
   })
 
   it('deduplicates findings with the same rule and message', async () => {
-    const config = { ...defaultConfig, max_iterations: 2 }
+    const config = { ...defaultRuntime, max_iterations: 2 }
     const finding = { severity: 'error' as const, rule: 'leak', message: 'secret in logs' }
     const faux = registerResponses([
       { summary: 'issue', findings: [finding], passed: false },
@@ -94,7 +97,7 @@ describe('runGuardAgent', () => {
   })
 
   it('accumulates distinct findings across turns', async () => {
-    const config = { ...defaultConfig, max_iterations: 2 }
+    const config = { ...defaultRuntime, max_iterations: 2 }
     const first = { severity: 'error' as const, rule: 'a', message: 'first' }
     const second = { severity: 'warning' as const, rule: 'b', message: 'second' }
     const faux = registerResponses([
@@ -114,7 +117,7 @@ describe('runGuardAgent', () => {
       ]),
       jsonResponse({ summary: 'ok', findings: [], passed: true }),
     ])
-    const result = await runGuardAgent(defaultPolicy, { mode: 'files', files: [] }, defaultConfig, registration.getModel())
+    const result = await runGuardAgent(defaultPolicy, { mode: 'files', files: [] }, defaultRuntime, registration.getModel())
     expect(result).toEqual({ summary: 'ok', findings: [], passed: true })
     expect(registration.state.callCount).toBe(2)
   })

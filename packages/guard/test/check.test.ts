@@ -47,11 +47,11 @@ describe('checkCommand', () => {
     expect(stderrSpy.mock.calls.map((c) => c[0]).join('')).toContain('no GUARD.md found')
   })
 
-  it('throws when the configured model is unknown', async () => {
-    writeFileSync(join(dir, 'GUARD.md'), '---\nprovider: openai\nmodel: missing\n---\n# Policy')
+  it('throws when the specified model is unknown', async () => {
+    writeFileSync(join(dir, 'GUARD.md'), '# Policy')
     const file = join(dir, 'a.ts')
     writeFileSync(file, 'const x = 1')
-    await expect(checkCommand({ args: [file] })).rejects.toThrow('Unknown model')
+    await expect(checkCommand({ args: [file], provider: 'openai', model: 'missing' })).rejects.toThrow('Unknown model')
   })
 
   it('exits 0 and prints PASS for clean input', async () => {

@@ -1,6 +1,4 @@
 ---
-provider: mock
-model: mock
 severity_threshold: warning
 ---
 
@@ -8,7 +6,8 @@ severity_threshold: warning
 
 ## Do
 
-- Keep code simple and readable.
+- Test coverage is always 100%.
+- Both test and lint are passed before commiting code.
 - Handle errors explicitly.
 
 ## Do Not

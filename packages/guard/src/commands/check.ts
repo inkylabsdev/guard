@@ -8,12 +8,15 @@ import { runGuardAgent } from '../agent/runGuardAgent.js'
 import { createModel } from '../providers/createModel.js'
 import { formatReport } from '../report/formatReport.js'
 import { computeExitCode } from '../report/exitCode.js'
-import type { ResolvedGuardPolicy } from '../types.js'
+import type { ResolvedGuardPolicy, RuntimeConfig } from '../types.js'
 
 export type CheckCommandOptions = {
   diff?: boolean
   stdin?: boolean
   args: string[]
+  provider?: string
+  model?: string
+  maxIterations?: number
 }
 
 export async function checkCommand(opts: CheckCommandOptions): Promise<void> {
@@ -43,10 +46,17 @@ export async function checkCommand(opts: CheckCommandOptions): Promise<void> {
     config,
   }
 
+  const rawProvider = opts.provider ?? process.env['GUARD_PROVIDER'] ?? 'mock'
+  const runtime: RuntimeConfig = {
+    provider: rawProvider as RuntimeConfig['provider'],
+    model: opts.model ?? process.env['GUARD_MODEL'] ?? 'mock',
+    max_iterations: opts.maxIterations ?? 3,
+  }
+
   const target = await collectTargets({ ...opts, cwd })
-  const handle = createModel(config)
+  const handle = createModel(runtime)
   try {
-    const result = await runGuardAgent(policy, target, config, handle.model)
+    const result = await runGuardAgent(policy, target, runtime, handle.model)
     console.log(formatReport(result, target, guardPath))
 
     const code = computeExitCode(result.findings, config.severity_threshold)

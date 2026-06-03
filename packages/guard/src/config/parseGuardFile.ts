@@ -9,17 +9,11 @@ const GuardIncludeSchema = z.union([
 ])
 
 const GuardConfigSchema = z.object({
-  model: z.string().optional(),
-  provider: z.enum(['openai', 'anthropic', 'mock']).optional(),
-  max_iterations: z.number().int().positive().optional(),
   severity_threshold: z.enum(['info', 'warning', 'error']).optional(),
   include: z.array(GuardIncludeSchema).optional(),
 })
 
 const defaults: GuardConfig = {
-  model: 'mock',
-  provider: 'mock',
-  max_iterations: 3,
   severity_threshold: 'info',
   include: [],
 }

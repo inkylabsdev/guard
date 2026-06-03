@@ -1,13 +1,13 @@
 import type { Api, Model } from '@earendil-works/pi-ai'
 import { runAgentLoop } from '@earendil-works/pi-agent-core'
-import type { GuardConfig, GuardEvalResult, GuardFinding, GuardTarget, ResolvedGuardPolicy } from '../types.js'
+import type { RuntimeConfig, GuardEvalResult, GuardFinding, GuardTarget, ResolvedGuardPolicy } from '../types.js'
 import { buildFollowUpPrompt, buildInitialUserMessage, buildSystemPrompt } from './buildPrompts.js'
 import { parseFindings } from './parseFindings.js'
 
 export async function runGuardAgent(
   policy: ResolvedGuardPolicy,
   target: GuardTarget,
-  config: GuardConfig,
+  runtime: RuntimeConfig,
   model: Model<Api>,
 ): Promise<GuardEvalResult> {
   let turnCount = 0
@@ -35,7 +35,7 @@ export async function runGuardAgent(
         }
         turnCount++
         hasCompletedTurn = true
-        return result.passed || turnCount >= config.max_iterations
+        return result.passed || turnCount >= runtime.max_iterations
       },
       getSteeringMessages: async () =>
         hasCompletedTurn

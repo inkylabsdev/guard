@@ -20,9 +20,6 @@ describe('parseGuardFile', () => {
     const file = join(dir, 'GUARD.md')
     writeFileSync(file, '# Policy\n\n- Be good.')
     const { config, body } = parseGuardFile(file)
-    expect(config.provider).toBe('mock')
-    expect(config.model).toBe('mock')
-    expect(config.max_iterations).toBe(3)
     expect(config.severity_threshold).toBe('info')
     expect(config.include).toEqual([])
     expect(body).toBe('# Policy\n\n- Be good.')
@@ -31,16 +28,10 @@ describe('parseGuardFile', () => {
   it('parses frontmatter overrides', () => {
     const file = join(dir, 'GUARD.md')
     writeFileSync(file, `---
-provider: anthropic
-model: claude-3-opus
-max_iterations: 5
 severity_threshold: error
 ---
 # Policy`)
     const { config } = parseGuardFile(file)
-    expect(config.provider).toBe('anthropic')
-    expect(config.model).toBe('claude-3-opus')
-    expect(config.max_iterations).toBe(5)
     expect(config.severity_threshold).toBe('error')
   })
 
