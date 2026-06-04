@@ -2,6 +2,7 @@ import { readFileSync } from 'fs'
 import matter from 'gray-matter'
 import { z } from 'zod'
 import type { GuardConfig } from '../types.js'
+import { DEPENDENCY_NAME_RE } from './registry.js'
 
 const GuardIncludeSchema = z.union([
   z.string(),
@@ -11,7 +12,7 @@ const GuardIncludeSchema = z.union([
 const GuardConfigSchema = z.object({
   severity_threshold: z.enum(['info', 'warning', 'error']).optional(),
   include: z.array(GuardIncludeSchema).optional(),
-  dependencies: z.array(z.string().min(1)).optional(),
+  dependencies: z.array(z.string().regex(DEPENDENCY_NAME_RE)).optional(),
 })
 
 const defaults: GuardConfig = {

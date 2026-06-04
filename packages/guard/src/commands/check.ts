@@ -58,24 +58,24 @@ export async function checkCommand(opts: CheckCommandOptions): Promise<void> {
     max_iterations: opts.maxIterations ?? 3,
   }
 
-  const target = await collectTargets({ ...opts, cwd })
-  const handle = createModel(runtime)
-  try {
-    if (project.mode === 'single') {
-      const guardPath = project.path
-      const { config, body } = parseGuardFile(guardPath)
-      const guardDir = dirname(guardPath)
+  if (project.mode === 'single') {
+    const guardPath = project.path
+    const { config, body } = parseGuardFile(guardPath)
+    const guardDir = dirname(guardPath)
 
-      try {
-        await installDependencies(guardDir, config.dependencies)
-      } catch (err) {
-        process.stderr.write(`error: ${String(err)}\n`)
-        process.exit(2)
-      }
+    try {
+      await installDependencies(guardDir, config.dependencies)
+    } catch (err) {
+      process.stderr.write(`error: ${String(err)}\n`)
+      process.exit(2)
+    }
 
-      const linkedContent = resolveLinkedFiles(body, guardDir)
-      const includeContent = await resolveIncludes(config.include)
-      const fullContent = [body, linkedContent, includeContent].filter(Boolean).join('\n\n')
+    const linkedContent = resolveLinkedFiles(body, guardDir)
+    const includeContent = await resolveIncludes(config.include, guardDir)
+    const fullContent = [body, linkedContent, includeContent].filter(Boolean).join('\n\n')
+    const target = await collectTargets({ ...opts, cwd })
+    const handle = createModel(runtime)
+    try {
 
       const policy: ResolvedGuardPolicy = {
         policyPath: guardPath,
@@ -88,8 +88,14 @@ export async function checkCommand(opts: CheckCommandOptions): Promise<void> {
 
       const code = computeExitCode(result.findings, config.severity_threshold)
       process.exit(code)
+    } finally {
+      handle.cleanup()
     }
+  }
 
+  const target = await collectTargets({ ...opts, cwd })
+  const handle = createModel(runtime)
+  try {
     const result = await runGuardPackage(guardPackage!, target, runtime, handle.model)
     console.log(formatPackageReport(result, target, guardPackage!.manifestPath))
     process.exit(computePackageExitCode(result, 'info'))

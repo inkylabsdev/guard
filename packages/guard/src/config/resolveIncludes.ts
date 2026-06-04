@@ -1,3 +1,5 @@
+import { existsSync, readFileSync } from 'fs'
+import { isAbsolute, resolve } from 'path'
 import type { GuardInclude } from '../types.js'
 
 function githubRawUrl(include: { github: string; ref?: string; path?: string }): string {
@@ -8,25 +10,46 @@ function githubRawUrl(include: { github: string; ref?: string; path?: string }):
   return `https://raw.githubusercontent.com/${owner}/${repo}/${ref}/${filePath}`
 }
 
-function resolveUrl(inc: GuardInclude): string | null {
+type ResolvedInclude =
+  | { type: 'remote'; url: string }
+  | { type: 'local'; path: string }
+
+function resolveInclude(inc: GuardInclude, baseDir?: string): ResolvedInclude | null {
   if (typeof inc === 'string') {
     if (inc.startsWith('github:')) {
-      return githubRawUrl({ github: inc.slice('github:'.length) })
+      return { type: 'remote', url: githubRawUrl({ github: inc.slice('github:'.length) }) }
+    }
+    if (baseDir) {
+      return { type: 'local', path: isAbsolute(inc) ? inc : resolve(baseDir, inc) }
     }
     process.stderr.write(`warn: unknown include format: ${inc}\n`)
     return null
   }
-  return githubRawUrl(inc)
+  return { type: 'remote', url: githubRawUrl(inc) }
 }
 
-export async function resolveIncludes(includes: GuardInclude[]): Promise<string> {
+export async function resolveIncludes(includes: GuardInclude[], baseDir?: string): Promise<string> {
   const results = await Promise.all(
     includes.map((inc) => {
-      const url = resolveUrl(inc)
-      return url ? fetchRemote(url) : Promise.resolve(null)
+      const resolved = resolveInclude(inc, baseDir)
+      if (!resolved) return Promise.resolve(null)
+      return resolved.type === 'remote' ? fetchRemote(resolved.url) : Promise.resolve(readLocal(resolved.path))
     }),
   )
   return results.filter(Boolean).join('\n\n')
+}
+
+function readLocal(path: string): string | null {
+  if (!existsSync(path)) {
+    process.stderr.write(`warn: failed to read include ${path}: file not found\n`)
+    return null
+  }
+  try {
+    return readFileSync(path, 'utf8')
+  } catch (err) {
+    process.stderr.write(`warn: failed to read include ${path}: ${String(err)}\n`)
+    return null
+  }
 }
 
 async function fetchRemote(url: string): Promise<string | null> {

@@ -26,8 +26,9 @@ cli
 
 cli
   .command('install [...args]', 'Install guard dependencies into .guard_modules/')
-  .action((args: string[]) => {
-    installCommand({ args }).catch((err) => {
+  .option('--reinstall', 'Reinstall dependencies even when already present')
+  .action((args: string[], opts: { reinstall?: boolean }) => {
+    installCommand({ args, reinstall: opts.reinstall }).catch((err) => {
       process.stderr.write(`error: ${String(err)}\n`)
       process.exit(2)
     })

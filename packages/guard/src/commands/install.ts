@@ -5,6 +5,7 @@ import { installDependencies } from '../config/registry.js'
 
 export type InstallCommandOptions = {
   args: string[]
+  reinstall?: boolean
 }
 
 export async function installCommand(opts: InstallCommandOptions): Promise<void> {
@@ -23,9 +24,9 @@ export async function installCommand(opts: InstallCommandOptions): Promise<void>
   const projectRoot = dirname(project.path)
   const dependencies = opts.args.length > 0 ? opts.args : parseGuardFile(project.path).config.dependencies
   if (dependencies.length === 0) {
-    process.stderr.write('error: no dependencies specified\n')
-    process.exit(2)
+    process.stdout.write('no guard dependencies to install\n')
+    return
   }
 
-  await installDependencies(projectRoot, dependencies)
+  await installDependencies(projectRoot, dependencies, { reinstall: opts.reinstall })
 }

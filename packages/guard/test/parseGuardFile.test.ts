@@ -58,4 +58,15 @@ Body`)
     const { config } = parseGuardFile(file)
     expect(config.dependencies).toEqual(['simple-writing-guard'])
   })
+
+  it('rejects invalid dependency names', () => {
+    const file = join(dir, 'GUARD.md')
+    writeFileSync(file, `---
+dependencies:
+  - ../bad
+---
+Body`)
+
+    expect(() => parseGuardFile(file)).toThrow()
+  })
 })

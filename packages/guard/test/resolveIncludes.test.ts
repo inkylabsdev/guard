@@ -1,4 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
+import { mkdirSync, rmSync, writeFileSync } from 'fs'
+import { tmpdir } from 'os'
+import { join } from 'path'
 import { resolveIncludes } from '../src/config/resolveIncludes.js'
 
 function mockFetch(text: string, ok = true) {
@@ -65,6 +68,51 @@ describe('resolveIncludes', () => {
     expect(result).toBe('')
     expect(stderrSpy.mock.calls.map((c) => c[0]).join('')).toContain('unknown include format')
     stderrSpy.mockRestore()
+  })
+
+  it('reads local include paths relative to a base directory', async () => {
+    const dir = join(tmpdir(), `guard-includes-${Date.now()}`)
+    mkdirSync(join(dir, '.guard_modules', 'demo-guard'), { recursive: true })
+    writeFileSync(join(dir, '.guard_modules', 'demo-guard', 'GUARD.md'), '# Local Rules')
+
+    expect(await resolveIncludes(['.guard_modules/demo-guard/GUARD.md'], dir)).toBe('# Local Rules')
+
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('reads absolute local include paths', async () => {
+    const dir = join(tmpdir(), `guard-includes-${Date.now()}`)
+    const file = join(dir, 'GUARD.md')
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(file, '# Absolute Rules')
+
+    expect(await resolveIncludes([file], dir)).toBe('# Absolute Rules')
+
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('warns and skips missing local include paths', async () => {
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+
+    const result = await resolveIncludes(['.guard_modules/missing/GUARD.md'], tmpdir())
+
+    expect(result).toBe('')
+    expect(stderrSpy.mock.calls.map((c) => c[0]).join('')).toContain('file not found')
+    stderrSpy.mockRestore()
+  })
+
+  it('warns and skips local include paths that cannot be read as files', async () => {
+    const dir = join(tmpdir(), `guard-includes-${Date.now()}`)
+    mkdirSync(join(dir, 'rules'), { recursive: true })
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+
+    const result = await resolveIncludes(['rules'], dir)
+
+    expect(result).toBe('')
+    expect(stderrSpy.mock.calls.map((c) => c[0]).join('')).toContain('failed to read include')
+
+    stderrSpy.mockRestore()
+    rmSync(dir, { recursive: true, force: true })
   })
 
   it('joins multiple includes with double newline', async () => {
