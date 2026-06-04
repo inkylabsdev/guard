@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { computeExitCode } from '../src/report/exitCode.js'
-import { formatReport } from '../src/report/formatReport.js'
-import type { GuardEvalResult, GuardTarget } from '../src/types.js'
+import { computeExitCode, computePackageExitCode } from '../src/report/exitCode.js'
+import { formatPackageReport, formatReport } from '../src/report/formatReport.js'
+import type { GuardEvalResult, GuardTarget, PackageEvalResult } from '../src/types.js'
 
 describe('computeExitCode', () => {
   it('returns 0 when no findings', () => {
@@ -26,6 +26,29 @@ describe('computeExitCode', () => {
 
   it('returns 1 for error when threshold is error', () => {
     expect(computeExitCode([{ severity: 'error', message: 'x' }], 'error')).toBe(1)
+  })
+})
+
+describe('computePackageExitCode', () => {
+  it('returns 2 when any rule errors', () => {
+    const result: PackageEvalResult = {
+      summary: 'error',
+      findings: [{ severity: 'error', message: 'x' }],
+      passed: false,
+      ruleResults: [{ rule_id: 'a', status: 'error', findings: [], summary: 'failed' }],
+    }
+    expect(computePackageExitCode(result, 'info')).toBe(2)
+  })
+
+  it('uses finding threshold when no rules error', () => {
+    const result: PackageEvalResult = {
+      summary: 'fail',
+      findings: [{ severity: 'warning', message: 'x' }],
+      passed: false,
+      ruleResults: [{ rule_id: 'a', status: 'fail', findings: [{ severity: 'warning', message: 'x' }], summary: 'failed' }],
+    }
+    expect(computePackageExitCode(result, 'error')).toBe(0)
+    expect(computePackageExitCode(result, 'warning')).toBe(1)
   })
 })
 
@@ -104,5 +127,24 @@ describe('formatReport', () => {
     const target: GuardTarget = { mode: 'files', files: [] }
     const report = formatReport(result, target, '/repo/GUARD.md')
     expect(report).toContain('1 error, 1 warning, 2 info')
+  })
+})
+
+describe('formatPackageReport', () => {
+  it('shows abort and error rule results', () => {
+    const result: PackageEvalResult = {
+      summary: 'error',
+      findings: [],
+      passed: false,
+      ruleResults: [
+        { rule_id: 'base', status: 'error', findings: [], summary: 'script failed' },
+        { rule_id: 'child', status: 'abort', findings: [], summary: 'dependency failed' },
+      ],
+    }
+    const target: GuardTarget = { mode: 'files', files: [] }
+    const report = formatPackageReport(result, target, '/repo/package.json')
+    expect(report).toContain('Rule Results')
+    expect(report).toContain('ERROR base')
+    expect(report).toContain('ABORT child')
   })
 })

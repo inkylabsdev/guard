@@ -1,7 +1,4 @@
 ---
-provider: mock
-model: mock
-max_iterations: 3
 severity_threshold: warning
 ---
 

@@ -6,9 +6,6 @@ const policy: ResolvedGuardPolicy = {
   policyPath: '/repo/GUARD.md',
   content: '# Policy',
   config: {
-    model: 'mock',
-    provider: 'mock',
-    max_iterations: 3,
     severity_threshold: 'info',
     include: [],
   },

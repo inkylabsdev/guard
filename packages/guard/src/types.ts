@@ -45,3 +45,38 @@ export type GuardEvalResult = {
   findings: GuardFinding[]
   passed: boolean
 }
+
+export type GuardRuleSeverity = GuardFinding['severity']
+
+export type ParsedGuardRule = {
+  id: string
+  severity: GuardRuleSeverity
+  description: string
+  depends_on: string[]
+  body: string
+}
+
+export type GuardRule = ParsedGuardRule & {
+  ruleDir: string
+  guardPath: string
+}
+
+export type GuardPackage = {
+  rootDir: string
+  manifestPath: string
+  rules: GuardRule[]
+}
+
+export type RuleResult = {
+  rule_id: string
+  status: 'pass' | 'fail' | 'error' | 'abort'
+  findings: GuardFinding[]
+  summary: string
+}
+
+export type PackageEvalResult = {
+  summary: string
+  findings: GuardFinding[]
+  passed: boolean
+  ruleResults: RuleResult[]
+}

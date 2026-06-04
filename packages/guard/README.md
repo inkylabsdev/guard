@@ -40,9 +40,6 @@ Place a `GUARD.md` in your repo root (guard walks up from cwd to find it).
 
 ```markdown
 ---
-provider: mock
-model: mock
-max_iterations: 3
 severity_threshold: warning
 include:
   - github:inkylabs/guard-rules/javascript
@@ -64,9 +61,6 @@ include:
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `provider` | `mock` \| `openai` \| `anthropic` | `mock` | LLM provider |
-| `model` | string | `mock` | Model name |
-| `max_iterations` | number | `3` | Max agent loop iterations |
 | `severity_threshold` | `info` \| `warning` \| `error` | `info` | Minimum severity to fail |
 | `include` | array | `[]` | Remote rule sets to include |
 

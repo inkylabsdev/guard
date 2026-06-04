@@ -1,5 +1,5 @@
 import chalk from 'chalk'
-import type { GuardEvalResult, GuardFinding, GuardTarget } from '../types.js'
+import type { GuardEvalResult, GuardFinding, GuardTarget, PackageEvalResult } from '../types.js'
 
 const SEVERITY_COLOR: Record<GuardFinding['severity'], (s: string) => string> = {
   error: chalk.red,
@@ -68,6 +68,29 @@ export function formatReport(
   const counts = { error: 0, warning: 0, info: 0 }
   for (const f of result.findings) counts[f.severity]++
   lines.push(`${counts.error} error${counts.error !== 1 ? 's' : ''}, ${counts.warning} warning${counts.warning !== 1 ? 's' : ''}, ${counts.info} info`)
+
+  return lines.join('\n')
+}
+
+export function formatPackageReport(
+  result: PackageEvalResult,
+  target: GuardTarget,
+  packagePath: string,
+): string {
+  const lines = formatReport(result, target, packagePath).split('\n')
+  const notable = result.ruleResults.filter((ruleResult) =>
+    ruleResult.status === 'error' || ruleResult.status === 'abort')
+
+  if (notable.length === 0) return lines.join('\n')
+
+  lines.push('')
+  lines.push(chalk.bold('Rule Results'))
+
+  for (const ruleResult of notable) {
+    lines.push('')
+    lines.push(`${ruleResult.status.toUpperCase()} ${ruleResult.rule_id}`)
+    lines.push(ruleResult.summary)
+  }
 
   return lines.join('\n')
 }

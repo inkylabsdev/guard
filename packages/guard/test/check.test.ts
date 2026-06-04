@@ -14,6 +14,21 @@ function mockExit() {
   })
 }
 
+function writePackageRule(root: string, id = 'sample-rule', dependsOn: string[] = []) {
+  const ruleDir = join(root, 'src', id)
+  mkdirSync(ruleDir, { recursive: true })
+  writeFileSync(join(root, 'package.json'), '{}')
+  writeFileSync(join(ruleDir, 'GUARD.md'), `---
+id: ${id}
+severity: warning
+description: Sample rule
+depends_on: ${JSON.stringify(dependsOn)}
+---
+## Rule
+
+No secrets.`)
+}
+
 describe('checkCommand', () => {
   let dir: string
   let stderrSpy: ReturnType<typeof vi.spyOn>
@@ -40,11 +55,31 @@ describe('checkCommand', () => {
     expect(stderrSpy.mock.calls.map((c) => c[0]).join('')).toContain('no input specified')
   })
 
-  it('exits 2 when no GUARD.md found', async () => {
+  it('exits 2 when no guard project is found', async () => {
     const exit = mockExit()
     await expect(checkCommand({ args: [dir] })).rejects.toThrow(MockExit)
     expect(exit).toHaveBeenCalledWith(2)
-    expect(stderrSpy.mock.calls.map((c) => c[0]).join('')).toContain('no GUARD.md found')
+    expect(stderrSpy.mock.calls.map((c) => c[0]).join('')).toContain('no guard project found')
+  })
+
+  it('exits 2 when both guard formats are present', async () => {
+    const exit = mockExit()
+    writeFileSync(join(dir, 'GUARD.md'), '# Policy')
+    writeFileSync(join(dir, 'package.json'), '{}')
+    mkdirSync(join(dir, 'src'))
+    await expect(checkCommand({ args: [dir] })).rejects.toThrow(MockExit)
+    expect(exit).toHaveBeenCalledWith(2)
+    expect(stderrSpy.mock.calls.map((c) => c[0]).join('')).toContain('both GUARD.md and package.json')
+  })
+
+  it('exits 2 when package loading fails', async () => {
+    const exit = mockExit()
+    writePackageRule(dir, 'child', ['missing'])
+    const file = join(dir, 'clean.ts')
+    writeFileSync(file, 'const x = 1')
+    await expect(checkCommand({ args: [file] })).rejects.toThrow(MockExit)
+    expect(exit).toHaveBeenCalledWith(2)
+    expect(stderrSpy.mock.calls.map((c) => c[0]).join('')).toContain('depends on missing rule')
   })
 
   it('throws when the specified model is unknown', async () => {
@@ -79,5 +114,25 @@ describe('checkCommand', () => {
     writeFileSync(join(dir, 'GUARD.md'), '# Policy')
     await expect(checkCommand({ diff: true, args: [] })).rejects.toThrow(MockExit)
     expect(exit).toHaveBeenCalledWith(0)
+  })
+
+  it('runs package mode and exits 0 for clean input', async () => {
+    const exit = mockExit()
+    writePackageRule(dir)
+    const file = join(dir, 'clean.ts')
+    writeFileSync(file, 'const x = 1')
+    await expect(checkCommand({ args: [file] })).rejects.toThrow(MockExit)
+    expect(exit).toHaveBeenCalledWith(0)
+    expect(stdoutSpy.mock.calls.map((c) => c[0]).join('')).toContain('PASS')
+  })
+
+  it('runs package mode and exits 1 for rule failures', async () => {
+    const exit = mockExit()
+    writePackageRule(dir)
+    const file = join(dir, 'bad.ts')
+    writeFileSync(file, 'console.log(secret)')
+    await expect(checkCommand({ args: [file] })).rejects.toThrow(MockExit)
+    expect(exit).toHaveBeenCalledWith(1)
+    expect(stdoutSpy.mock.calls.map((c) => c[0]).join('')).toContain('FAIL')
   })
 })
