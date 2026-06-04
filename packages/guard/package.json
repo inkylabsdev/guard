@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "description": "LLM-powered policy checker for code, diffs, and text",
   "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
   "bin": {
     "guard": "./dist/cli.js"
   },
