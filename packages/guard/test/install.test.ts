@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs'
-import { join } from 'path'
+import { basename, join } from 'path'
 import { tmpdir } from 'os'
 
 const execaMock = vi.hoisted(() => vi.fn())
@@ -293,6 +293,31 @@ describe('installDependencies', () => {
     expect(readFileSync(join(dir, '.gitignore'), 'utf8')).toBe('.guard_modules/\n')
   })
 
+  it('installs a relative path dependency from the project root', async () => {
+    mkdirSync(join(dir, 'packages', 'local-guard'), { recursive: true })
+    writeFileSync(join(dir, 'packages', 'local-guard', 'GUARD.md'), '# Local')
+
+    await installDependencies(dir, ['./packages/local-guard'])
+
+    expect(execaMock).not.toHaveBeenCalled()
+    expect(existsSync(join(dir, '.guard_modules', 'local-guard', 'GUARD.md'))).toBe(true)
+    expect(readFileSync(join(dir, '.guard_modules', 'local-guard', 'GUARD.md'), 'utf8')).toBe('# Local')
+    expect(readFileSync(join(dir, '.gitignore'), 'utf8')).toBe('.guard_modules/\n')
+  })
+
+  it('installs an absolute path dependency', async () => {
+    const sourceDir = join(tmpdir(), `guard-absolute-source-${Date.now()}`)
+    mkdirSync(sourceDir, { recursive: true })
+    writeFileSync(join(sourceDir, 'GUARD.md'), '# Absolute')
+
+    await installDependencies(dir, [sourceDir])
+
+    expect(execaMock).not.toHaveBeenCalled()
+    expect(readFileSync(join(dir, '.guard_modules', basename(sourceDir), 'GUARD.md'), 'utf8')).toBe('# Absolute')
+
+    rmSync(sourceDir, { recursive: true, force: true })
+  })
+
   it('skips existing dependency directories unless reinstall is requested', async () => {
     process.env['GUARD_REGISTRY_PATH'] = writeRegistry(dir, [
       {
@@ -361,6 +386,30 @@ describe('installDependencies', () => {
     process.env['GUARD_REGISTRY_PATH'] = writeRegistry(dir)
 
     await expect(installDependencies(dir, ['../bad'])).rejects.toThrow('dependency name must match')
+  })
+
+  it('throws when a relative path dependency escapes the project root', async () => {
+    await expect(installDependencies(dir, ['./../bad'])).rejects.toThrow('relative dependency path must not escape project root')
+  })
+
+  it('throws when a path dependency is missing', async () => {
+    await expect(installDependencies(dir, ['./missing-guard'])).rejects.toThrow('dependency path must point to an existing directory')
+  })
+
+  it('throws when a path dependency has no module directory name', async () => {
+    await expect(installDependencies(dir, ['/'])).rejects.toThrow('dependency path must include a module directory name: /')
+  })
+
+  it('throws when path dependency module names collide', async () => {
+    mkdirSync(join(dir, 'a', 'local-guard'), { recursive: true })
+    writeFileSync(join(dir, 'a', 'local-guard', 'GUARD.md'), '# A')
+    const otherDir = join(tmpdir(), `guard-collision-${Date.now()}`, 'local-guard')
+    mkdirSync(otherDir, { recursive: true })
+    writeFileSync(join(otherDir, 'GUARD.md'), '# B')
+
+    await expect(installDependencies(dir, ['./a/local-guard', otherDir])).rejects.toThrow('dependency module name collision: local-guard')
+
+    rmSync(join(otherDir, '..'), { recursive: true, force: true })
   })
 
   it('throws when a registry subdirectory is missing', async () => {

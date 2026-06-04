@@ -1,5 +1,5 @@
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs'
-import { dirname, isAbsolute, join, relative, resolve } from 'path'
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'fs'
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'path'
 import { execa } from 'execa'
 import { z } from 'zod'
 import type { RegistryPackage } from '../types.js'
@@ -21,6 +21,10 @@ type PackageSource = {
   repoUrl: string
   subdirectory?: string
 }
+
+type DependencySource =
+  | { kind: 'registry'; dependency: string; moduleName: string }
+  | { kind: 'path'; dependency: string; moduleName: string; sourceDir: string }
 
 function registryUrl(): string {
   const url = process.env['GUARD_REGISTRY_URL'] ?? DEFAULT_REGISTRY_URL
@@ -82,8 +86,60 @@ function validateDependencyName(name: string): void {
 }
 
 function moduleDir(projectRoot: string, name: string): string {
-  validateDependencyName(name)
   return join(projectRoot, '.guard_modules', name)
+}
+
+function isPathInside(parent: string, child: string): boolean {
+  const relativePath = relative(parent, child)
+  return relativePath === '' || (!relativePath.startsWith('..') && !isAbsolute(relativePath))
+}
+
+function validateSourceDirectory(sourceDir: string, dependency: string): void {
+  if (!existsSync(sourceDir) || !statSync(sourceDir).isDirectory()) {
+    throw new Error(`dependency path must point to an existing directory: ${dependency}`)
+  }
+}
+
+function dependencySource(projectRoot: string, dependency: string): DependencySource {
+  if (dependency.startsWith('./')) {
+    const sourceDir = resolve(projectRoot, dependency)
+    if (!isPathInside(projectRoot, sourceDir)) {
+      throw new Error(`relative dependency path must not escape project root: ${dependency}`)
+    }
+    validateSourceDirectory(sourceDir, dependency)
+    return { kind: 'path', dependency, moduleName: basename(sourceDir), sourceDir }
+  }
+
+  if (isAbsolute(dependency)) {
+    const sourceDir = resolve(dependency)
+    validateSourceDirectory(sourceDir, dependency)
+    return { kind: 'path', dependency, moduleName: basename(sourceDir), sourceDir }
+  }
+
+  validateDependencyName(dependency)
+  return { kind: 'registry', dependency, moduleName: dependency }
+}
+
+function validateModuleName(moduleName: string, dependency: string): void {
+  if (moduleName === '') {
+    throw new Error(`dependency path must include a module directory name: ${dependency}`)
+  }
+}
+
+function dependencySources(projectRoot: string, dependencies: string[]): DependencySource[] {
+  const byModuleName = new Map<string, string>()
+  const sources = [...new Set(dependencies)].sort().map((dependency) => dependencySource(projectRoot, dependency))
+
+  for (const source of sources) {
+    validateModuleName(source.moduleName, source.dependency)
+    const existing = byModuleName.get(source.moduleName)
+    if (existing && existing !== source.dependency) {
+      throw new Error(`dependency module name collision: ${source.moduleName}`)
+    }
+    byModuleName.set(source.moduleName, source.dependency)
+  }
+
+  return sources
 }
 
 function sourceSubdirectory(tempRepo: string, source: PackageSource, url: string): string {
@@ -124,6 +180,12 @@ async function clonePackage(entry: RegistryPackage, destination: string): Promis
   }
 }
 
+function copyPathPackage(sourceDir: string, destination: string): void {
+  rmSync(destination, { recursive: true, force: true })
+  mkdirSync(dirname(destination), { recursive: true })
+  cpSync(sourceDir, destination, { recursive: true })
+}
+
 function ensureGitignore(projectRoot: string): void {
   const gitignorePath = join(projectRoot, '.gitignore')
   const entry = '.guard_modules/'
@@ -142,23 +204,27 @@ export type InstallDependenciesOptions = {
 export async function installDependencies(projectRoot: string, dependencies: string[], opts: InstallDependenciesOptions = {}): Promise<void> {
   if (dependencies.length === 0) return
 
-  const dependencyNames = [...new Set(dependencies)].sort()
-  for (const dependency of dependencyNames) {
-    validateDependencyName(dependency)
-  }
+  const sources = dependencySources(projectRoot, dependencies)
+  const registrySources = sources.filter((source) => source.kind === 'registry')
+  const byName = new Map(
+    registrySources.length > 0
+      ? (await loadRegistry()).map((entry) => [entry.name, entry])
+      : [],
+  )
 
-  const registry = await loadRegistry()
-  const byName = new Map(registry.map((entry) => [entry.name, entry]))
-
-  for (const dependency of dependencyNames) {
-    const entry = byName.get(dependency)
-    if (!entry) {
-      throw new Error(`dependency not found in registry: ${dependency}`)
-    }
-
-    const destination = moduleDir(projectRoot, dependency)
+  for (const source of sources) {
+    const destination = moduleDir(projectRoot, source.moduleName)
     if (existsSync(destination) && !opts.reinstall) continue
 
+    if (source.kind === 'path') {
+      copyPathPackage(source.sourceDir, destination)
+      continue
+    }
+
+    const entry = byName.get(source.dependency)
+    if (!entry) {
+      throw new Error(`dependency not found in registry: ${source.dependency}`)
+    }
     await clonePackage(entry, destination)
   }
 
