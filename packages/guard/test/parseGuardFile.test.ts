@@ -47,4 +47,15 @@ Body`)
     const { config } = parseGuardFile(file)
     expect(config.include[0]).toBe('github:inkylabs/guard-rules/javascript')
   })
+
+  it('parses dependency names', () => {
+    const file = join(dir, 'GUARD.md')
+    writeFileSync(file, `---
+dependencies:
+  - simple-writing-guard
+---
+Body`)
+    const { config } = parseGuardFile(file)
+    expect(config.dependencies).toEqual(['simple-writing-guard'])
+  })
 })

@@ -2,6 +2,7 @@
 import { cac } from 'cac'
 import { versionCommand } from './commands/version.js'
 import { checkCommand } from './commands/check.js'
+import { installCommand } from './commands/install.js'
 
 const cli = cac('guard')
 
@@ -18,6 +19,15 @@ cli
   .option('--max-iterations <n>', 'Maximum agent iterations (default: 3)', { default: 3 })
   .action((args: string[], opts: { diff?: boolean; stdin?: boolean; provider?: string; model?: string; maxIterations?: number }) => {
     checkCommand({ diff: opts.diff, stdin: opts.stdin, args, provider: opts.provider, model: opts.model, maxIterations: opts.maxIterations }).catch((err) => {
+      process.stderr.write(`error: ${String(err)}\n`)
+      process.exit(2)
+    })
+  })
+
+cli
+  .command('install [...args]', 'Install guard dependencies into .guard_modules/')
+  .action((args: string[]) => {
+    installCommand({ args }).catch((err) => {
       process.stderr.write(`error: ${String(err)}\n`)
       process.exit(2)
     })

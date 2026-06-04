@@ -11,11 +11,13 @@ const GuardIncludeSchema = z.union([
 const GuardConfigSchema = z.object({
   severity_threshold: z.enum(['info', 'warning', 'error']).optional(),
   include: z.array(GuardIncludeSchema).optional(),
+  dependencies: z.array(z.string().min(1)).optional(),
 })
 
 const defaults: GuardConfig = {
   severity_threshold: 'info',
   include: [],
+  dependencies: [],
 }
 
 export type ParsedGuardFile = {

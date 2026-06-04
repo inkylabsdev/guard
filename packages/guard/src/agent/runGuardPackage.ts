@@ -51,6 +51,7 @@ function rulePolicy(rule: GuardRule, helperOutput: string): ResolvedGuardPolicy 
     config: {
       severity_threshold: rule.severity,
       include: [],
+      dependencies: [],
     },
   }
 }

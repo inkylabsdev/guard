@@ -2,6 +2,7 @@ import { dirname } from 'path'
 import { findGuardProject } from '../config/findGuardProject.js'
 import { loadGuardPackage } from '../config/loadGuardPackage.js'
 import { parseGuardFile } from '../config/parseGuardFile.js'
+import { installDependencies } from '../config/registry.js'
 import { resolveLinkedFiles } from '../config/resolveLinkedFiles.js'
 import { resolveIncludes } from '../config/resolveIncludes.js'
 import { collectTargets } from '../input/collectTargets.js'
@@ -64,6 +65,13 @@ export async function checkCommand(opts: CheckCommandOptions): Promise<void> {
       const guardPath = project.path
       const { config, body } = parseGuardFile(guardPath)
       const guardDir = dirname(guardPath)
+
+      try {
+        await installDependencies(guardDir, config.dependencies)
+      } catch (err) {
+        process.stderr.write(`error: ${String(err)}\n`)
+        process.exit(2)
+      }
 
       const linkedContent = resolveLinkedFiles(body, guardDir)
       const includeContent = await resolveIncludes(config.include)

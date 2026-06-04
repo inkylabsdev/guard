@@ -1,6 +1,7 @@
 export type GuardConfig = {
   severity_threshold: 'info' | 'warning' | 'error'
   include: GuardInclude[]
+  dependencies: string[]
 }
 
 export type RuntimeConfig = {
@@ -65,6 +66,14 @@ export type GuardPackage = {
   rootDir: string
   manifestPath: string
   rules: GuardRule[]
+}
+
+export type RegistryPackage = {
+  name: string
+  description: string
+  license: string
+  homepage: string
+  url: string
 }
 
 export type RuleResult = {
