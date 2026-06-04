@@ -1,4 +1,4 @@
-# @inkylabs/guard
+# @inkylabsdev/guard
 
 A lightweight LLM-powered policy checker for code, diffs, test results, logs, or arbitrary text. CLI ergonomics: fast, cheap, clear reports, and useful defaults.
 
@@ -9,9 +9,9 @@ Guard reads policies from `GUARD.md`, collects input from git diffs, files, dire
 ## Installation
 
 ```bash
-npm install -g @inkylabs/guard
+npm install -g @inkylabsdev/guard
 # or
-pnpm add -g @inkylabs/guard
+pnpm add -g @inkylabsdev/guard
 ```
 
 ## Commands
@@ -20,7 +20,7 @@ pnpm add -g @inkylabs/guard
 
 ```bash
 guard version
-# @inkylabs/guard 0.1.0
+# @inkylabsdev/guard 0.1.0
 ```
 
 ### `guard check`

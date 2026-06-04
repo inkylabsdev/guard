@@ -1,5 +1,5 @@
 {
-  "name": "@inkylabs/guard",
+  "name": "@inkylabsdev/guard",
   "version": "0.1.0",
   "description": "LLM-powered policy checker for code, diffs, and text",
   "type": "module",

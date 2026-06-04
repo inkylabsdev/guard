@@ -2,7 +2,7 @@
 severity_threshold: warning
 ---
 
-# Guard Policy for @inkylabs/guard
+# Guard Policy for @inkylabsdev/guard
 
 ## Do
 

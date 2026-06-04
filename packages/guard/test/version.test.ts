@@ -9,6 +9,6 @@ describe('versionCommand', () => {
     versionCommand()
     expect(spy).toHaveBeenCalledOnce()
     const output = spy.mock.calls[0][0] as string
-    expect(output).toMatch(/^@inkylabs\/guard \d+\.\d+\.\d+$/)
+    expect(output).toMatch(/^@inkylabsdev\/guard \d+\.\d+\.\d+$/)
   })
 })
