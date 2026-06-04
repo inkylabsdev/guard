@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { mkdirSync, rmSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { dirname, join, resolve } from 'path'
 import { fileURLToPath } from 'url'
@@ -9,6 +9,7 @@ import type { GuardRule } from '../src/types.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const fixtureRoot = resolve(here, 'fixtures/simple-writing-guard')
+const simpleWritingGuardRoot = resolve(here, '../../../guards/simple-writing-guard')
 
 function writeRule(root: string, id: string, frontmatter: Record<string, unknown> = {}): void {
   const ruleDir = join(root, 'src', id)
@@ -86,6 +87,25 @@ describe('loadGuardPackage', () => {
       'no-tier-one-ai-words',
     ])
     expect(pkg.rules[0].body).toContain('## Rule')
+  })
+
+  it('loads the simple-writing-guard package with category eval samples', () => {
+    const pkg = loadGuardPackage(simpleWritingGuardRoot)
+    expect(pkg.rules.map((rule) => rule.id)).toEqual([
+      'ai-vocabulary',
+      'boilerplate-phrases',
+      'chatbot-and-source-artifacts',
+      'formatting',
+      'sentence-structure',
+      'social-and-marketing',
+      'structure-and-rhythm',
+      'transitions-and-fillers',
+    ])
+
+    for (const rule of pkg.rules) {
+      expect(existsSync(join(rule.ruleDir, 'evals/bad/sample.md'))).toBe(true)
+      expect(existsSync(join(rule.ruleDir, 'evals/good/sample.md'))).toBe(true)
+    }
   })
 
   it('rejects packages without a manifest', () => {
