@@ -4,7 +4,7 @@ import { tmpdir } from 'os'
 import { dirname, join, resolve } from 'path'
 import { fileURLToPath } from 'url'
 import { findGuardProject } from '../src/config/findGuardProject.js'
-import { loadGuardPackage, orderGuardRules } from '../src/config/loadGuardPackage.js'
+import { loadGuardPackage, loadGuardPackageGraph, orderGuardRules } from '../src/config/loadGuardPackage.js'
 import type { GuardRule } from '../src/types.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -81,6 +81,8 @@ describe('loadGuardPackage', () => {
 
   it('loads and orders the simple-writing-guard fixture package', () => {
     const pkg = loadGuardPackage(fixtureRoot)
+    expect(pkg.id).toBe('@fixtures/simple-writing-guard')
+    expect(pkg.dependsOn).toEqual([])
     expect(pkg.rules.map((rule) => rule.id)).toEqual([
       'no-em-dash',
       'no-contrast-cliche',
@@ -91,6 +93,7 @@ describe('loadGuardPackage', () => {
 
   it('loads the simple-writing-guard package with category eval samples', () => {
     const pkg = loadGuardPackage(simpleWritingGuardRoot)
+    expect(pkg.id).toBe('@guards/simple-writing-guard')
     expect(pkg.rules.map((rule) => rule.id)).toEqual([
       'ai-vocabulary',
       'boilerplate-phrases',
@@ -116,6 +119,62 @@ describe('loadGuardPackage', () => {
   it('rejects packages without src', () => {
     rmSync(join(dir, 'src'), { recursive: true })
     expect(() => loadGuardPackage(dir)).toThrow('src/')
+  })
+
+  it('loads package guard dependencies and root GUARD.md context', () => {
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({
+      name: 'demo',
+      guard: { dependsOn: ['base'] },
+    }))
+    writeFileSync(join(dir, 'GUARD.md'), '# Root package guidance')
+    writeRule(dir, 'a')
+
+    const pkg = loadGuardPackage(dir)
+
+    expect(pkg.id).toBe('demo')
+    expect(pkg.dependsOn).toEqual(['base'])
+    expect(pkg.guardPath).toBe(join(dir, 'GUARD.md'))
+    expect(pkg.guardContent).toBe('# Root package guidance')
+  })
+
+  it('loads installed package dependencies into a package graph', () => {
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({
+      name: 'root',
+      guard: { dependsOn: ['base', 'base'] },
+    }))
+    writeRule(dir, 'root-rule')
+    const baseDir = join(dir, '.guard_modules', 'base')
+    mkdirSync(join(baseDir, 'src'), { recursive: true })
+    writeFileSync(join(baseDir, 'package.json'), JSON.stringify({ name: 'base' }))
+    writeRule(baseDir, 'base-rule')
+
+    const packages = loadGuardPackageGraph(dir)
+
+    expect(packages.map((pkg) => pkg.id)).toEqual(['root', 'base'])
+  })
+
+  it('rejects missing installed package dependencies', () => {
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({
+      name: 'root',
+      guard: { dependsOn: ['base'] },
+    }))
+    writeRule(dir, 'root-rule')
+
+    expect(() => loadGuardPackageGraph(dir)).toThrow('dependency package is not installed: base')
+  })
+
+  it('rejects installed package dependency id mismatches', () => {
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({
+      name: 'root',
+      guard: { dependsOn: ['base'] },
+    }))
+    writeRule(dir, 'root-rule')
+    const baseDir = join(dir, '.guard_modules', 'base')
+    mkdirSync(join(baseDir, 'src'), { recursive: true })
+    writeFileSync(join(baseDir, 'package.json'), JSON.stringify({ name: 'different' }))
+    writeRule(baseDir, 'base-rule')
+
+    expect(() => loadGuardPackageGraph(dir)).toThrow('package id mismatch')
   })
 
   it('rejects a rule directory without GUARD.md', () => {

@@ -1,6 +1,6 @@
 import { dirname } from 'path'
 import { findGuardProject } from '../config/findGuardProject.js'
-import { loadGuardPackage } from '../config/loadGuardPackage.js'
+import { loadGuardPackageGraph } from '../config/loadGuardPackage.js'
 import { parseGuardFile } from '../config/parseGuardFile.js'
 import { installDependencies } from '../config/registry.js'
 import { resolveLinkedFiles } from '../config/resolveLinkedFiles.js'
@@ -8,10 +8,12 @@ import { resolveIncludes } from '../config/resolveIncludes.js'
 import { collectTargets } from '../input/collectTargets.js'
 import { runGuardAgent } from '../agent/runGuardAgent.js'
 import { runGuardPackage } from '../agent/runGuardPackage.js'
+import { filterAndDedupeFindings, hasInput, sortFindings } from '../agent/findings.js'
+import { summarizeTarget } from '../agent/summarizeTarget.js'
 import { createModel } from '../providers/createModel.js'
 import { formatPackageReport, formatReport } from '../report/formatReport.js'
 import { computeExitCode, computePackageExitCode } from '../report/exitCode.js'
-import type { GuardPackage, ResolvedGuardPolicy, RuntimeConfig } from '../types.js'
+import type { GuardEvalResult, GuardPackage, ResolvedGuardPolicy, RuntimeConfig } from '../types.js'
 
 export type CheckCommandOptions = {
   diff?: boolean
@@ -19,7 +21,33 @@ export type CheckCommandOptions = {
   args: string[]
   provider?: string
   model?: string
-  maxIterations?: number
+  maxIterations?: number | string
+}
+
+function parsePositiveInt(value: string | undefined, name: string): number {
+  if (value === undefined) return 4
+  const parsed = parseInt(value, 10)
+  if (!Number.isFinite(parsed) || parsed <= 0 || String(parsed) !== value) {
+    throw new Error(`${name} must be a positive integer`)
+  }
+  return parsed
+}
+
+function parseConcurrency(): number {
+  try {
+    return parsePositiveInt(process.env['GUARD_AGENT_CONCURRENCY'], 'GUARD_AGENT_CONCURRENCY')
+  } catch (err) {
+    process.stderr.write(`error: ${String(err)}\n`)
+    process.exit(2)
+  }
+}
+
+function skippedResult(): GuardEvalResult {
+  return {
+    summary: 'No input to check.',
+    findings: [],
+    passed: true,
+  }
 }
 
 export async function checkCommand(opts: CheckCommandOptions): Promise<void> {
@@ -42,9 +70,11 @@ export async function checkCommand(opts: CheckCommandOptions): Promise<void> {
   }
 
   let guardPackage: GuardPackage | undefined
+  let guardPackages: GuardPackage[] | undefined
   if (project.mode === 'package') {
     try {
-      guardPackage = loadGuardPackage(project.path)
+      guardPackages = loadGuardPackageGraph(project.path)
+      guardPackage = guardPackages[0]
     } catch (err) {
       process.stderr.write(`error: ${String(err)}\n`)
       process.exit(2)
@@ -52,10 +82,12 @@ export async function checkCommand(opts: CheckCommandOptions): Promise<void> {
   }
 
   const rawProvider = opts.provider ?? process.env['GUARD_PROVIDER'] ?? 'mock'
+  const concurrency = parseConcurrency()
+
   const runtime: RuntimeConfig = {
     provider: rawProvider as RuntimeConfig['provider'],
     model: opts.model ?? process.env['GUARD_MODEL'] ?? 'mock',
-    max_iterations: opts.maxIterations ?? 3,
+    concurrency,
   }
 
   if (project.mode === 'single') {
@@ -74,16 +106,34 @@ export async function checkCommand(opts: CheckCommandOptions): Promise<void> {
     const includeContent = await resolveIncludes(config.include, guardDir)
     const fullContent = [body, linkedContent, includeContent].filter(Boolean).join('\n\n')
     const target = await collectTargets({ ...opts, cwd })
+    if (!hasInput(target)) {
+      console.log(formatReport(skippedResult(), target, guardPath))
+      process.exit(0)
+    }
+
     const handle = createModel(runtime)
     try {
-
       const policy: ResolvedGuardPolicy = {
         policyPath: guardPath,
         content: fullContent,
         config,
       }
 
-      const result = await runGuardAgent(policy, target, runtime, handle.model)
+      let targetSummary: string | undefined
+      try {
+        targetSummary = await summarizeTarget(target, handle.model)
+      /* c8 ignore next 3 */
+      } catch (err) {
+        process.stderr.write(`warning: target summarization failed: ${String(err)}\n`)
+      }
+
+      const rawResult = await runGuardAgent(policy, target, handle.model, targetSummary)
+      const { retained } = filterAndDedupeFindings(rawResult.findings)
+      const result = {
+        ...rawResult,
+        findings: sortFindings(retained),
+        passed: retained.length === 0,
+      }
       console.log(formatReport(result, target, guardPath))
 
       const code = computeExitCode(result.findings, config.severity_threshold)
@@ -94,9 +144,12 @@ export async function checkCommand(opts: CheckCommandOptions): Promise<void> {
   }
 
   const target = await collectTargets({ ...opts, cwd })
+  if (opts.maxIterations !== undefined) {
+    process.stderr.write('warning: --max-iterations is deprecated and ignored in package mode\n')
+  }
   const handle = createModel(runtime)
   try {
-    const result = await runGuardPackage(guardPackage!, target, runtime, handle.model)
+    const result = await runGuardPackage(guardPackages!, target, runtime.concurrency, handle.model)
     console.log(formatPackageReport(result, target, guardPackage!.manifestPath))
     process.exit(computePackageExitCode(result, 'info'))
   } finally {

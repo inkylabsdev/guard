@@ -1,7 +1,15 @@
-import { existsSync, readdirSync, statSync } from 'fs'
+import { existsSync, readFileSync, readdirSync, statSync } from 'fs'
 import { basename, join } from 'path'
+import { z } from 'zod'
 import { parseGuardRuleFile } from './parseGuardRuleFile.js'
 import type { GuardPackage, GuardRule } from '../types.js'
+
+const PackageManifestSchema = z.object({
+  name: z.string().optional(),
+  guard: z.object({
+    dependsOn: z.array(z.string()).optional(),
+  }).optional(),
+})
 
 function compareRule(a: GuardRule, b: GuardRule): number {
   return a.id.localeCompare(b.id)
@@ -82,6 +90,9 @@ export function loadGuardPackage(rootDir: string): GuardPackage {
   if (!existsSync(manifestPath)) {
     throw new Error('guard package is missing package.json')
   }
+  const manifest = PackageManifestSchema.parse(JSON.parse(readFileSync(manifestPath, 'utf8')))
+  const guardMdPath = join(rootDir, 'GUARD.md')
+  const guardMdExists = existsSync(guardMdPath)
 
   const rules = ruleDirs(rootDir).map((ruleDir) => {
     const guardPath = join(ruleDir, 'GUARD.md')
@@ -99,8 +110,40 @@ export function loadGuardPackage(rootDir: string): GuardPackage {
   validateRules(rules)
 
   return {
+    id: manifest.name ?? basename(rootDir),
     rootDir,
     manifestPath,
+    guardPath: guardMdExists ? guardMdPath : undefined,
+    guardContent: guardMdExists ? readFileSync(guardMdPath, 'utf8') : undefined,
+    dependsOn: manifest.guard?.dependsOn ?? [],
     rules: orderGuardRules(rules),
   }
+}
+
+export function loadGuardPackageGraph(rootDir: string): GuardPackage[] {
+  const rootPackage = loadGuardPackage(rootDir)
+  const packages = new Map<string, GuardPackage>([[rootPackage.id, rootPackage]])
+  const queue = [...rootPackage.dependsOn]
+
+  while (queue.length > 0) {
+    const packageId = queue.shift()!
+    if (packages.has(packageId)) continue
+
+    const packageDir = join(rootDir, '.guard_modules', packageId)
+    if (!existsSync(packageDir)) {
+      throw new Error(`dependency package is not installed: ${packageId}`)
+    }
+
+    const dependencyPackage = loadGuardPackage(packageDir)
+    if (dependencyPackage.id !== packageId) {
+      throw new Error(
+        `package id mismatch: "${packageId}" in dependsOn but package.json declares name "${dependencyPackage.id}"; ` +
+        `set "name": "${packageId}" in ${packageDir}/package.json or update dependsOn to use "${dependencyPackage.id}"`,
+      )
+    }
+    packages.set(packageId, dependencyPackage)
+    queue.push(...dependencyPackage.dependsOn)
+  }
+
+  return [...packages.values()]
 }

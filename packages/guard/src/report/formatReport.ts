@@ -46,7 +46,7 @@ export function formatReport(
     lines.push('')
     const color = SEVERITY_COLOR[f.severity]
     const location = [f.file, f.line].filter(Boolean).join(':')
-    const parts = [color(f.severity.toUpperCase()), f.rule, location].filter(Boolean)
+    const parts = [color(f.severity.toUpperCase()), `score=${f.score}`, f.rule, location].filter(Boolean)
     lines.push(parts.join(' '))
     lines.push(f.message)
     if (f.evidence) {

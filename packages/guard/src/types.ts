@@ -7,7 +7,7 @@ export type GuardConfig = {
 export type RuntimeConfig = {
   provider: 'openai' | 'anthropic' | 'mock'
   model: string
-  max_iterations: number
+  concurrency: number
 }
 
 export type GuardInclude =
@@ -27,6 +27,7 @@ export type GuardTarget = {
 
 export type GuardFinding = {
   severity: 'info' | 'warning' | 'error'
+  score: number
   rule?: string
   file?: string
   line?: number
@@ -63,8 +64,12 @@ export type GuardRule = ParsedGuardRule & {
 }
 
 export type GuardPackage = {
+  id: string
   rootDir: string
   manifestPath: string
+  guardPath?: string
+  guardContent?: string
+  dependsOn: string[]
   rules: GuardRule[]
 }
 
@@ -80,6 +85,7 @@ export type RuleResult = {
   rule_id: string
   status: 'pass' | 'fail' | 'error' | 'abort'
   findings: GuardFinding[]
+  filtered_findings: number
   summary: string
 }
 

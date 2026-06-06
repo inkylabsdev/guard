@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildFollowUpPrompt, buildInitialUserMessage, buildSystemPrompt, buildTargetContent } from '../src/agent/buildPrompts.js'
+import { buildInitialUserMessage, buildSummarizerUserMessage, buildSystemPrompt, buildTargetContent } from '../src/agent/buildPrompts.js'
 import type { GuardTarget, ResolvedGuardPolicy } from '../src/types.js'
 
 const policy: ResolvedGuardPolicy = {
@@ -8,6 +8,7 @@ const policy: ResolvedGuardPolicy = {
   config: {
     severity_threshold: 'info',
     include: [],
+    dependencies: [],
   },
 }
 
@@ -15,6 +16,7 @@ describe('buildSystemPrompt', () => {
   it('returns a non-empty string', () => {
     expect(buildSystemPrompt()).toBeTruthy()
     expect(buildSystemPrompt()).toContain('```json ... ```')
+    expect(buildSystemPrompt()).toContain('score')
   })
 })
 
@@ -24,6 +26,11 @@ describe('buildTargetContent', () => {
     const content = buildTargetContent(target)
     expect(content).toContain('=== Raw Input ===')
     expect(content).toContain('some log output')
+  })
+
+  it('includes explicitly empty raw input', () => {
+    const target: GuardTarget = { mode: 'stdin', files: [], raw: '' }
+    expect(buildTargetContent(target)).toBe('=== Raw Input ===\n')
   })
 
   it('includes file sections', () => {
@@ -65,10 +72,18 @@ describe('buildInitialUserMessage', () => {
     expect(message.content).toContain('const x = 1')
     expect(message.timestamp).toEqual(expect.any(Number))
   })
+
+  it('includes target summary when provided', () => {
+    const message = buildInitialUserMessage(policy, { mode: 'files', files: [] }, 'Changed files: a.ts')
+    expect(message.content).toContain('=== Target Summary ===')
+    expect(message.content).toContain('Changed files: a.ts')
+  })
 })
 
-describe('buildFollowUpPrompt', () => {
-  it('asks for additional violations', () => {
-    expect(buildFollowUpPrompt()).toContain('Review your previous evaluation')
+describe('buildSummarizerUserMessage', () => {
+  it('builds a summarizer request', () => {
+    const message = buildSummarizerUserMessage({ mode: 'files', files: [{ path: 'a.ts', content: 'code' }] })
+    expect(message.content).toContain('Summarize the target content')
+    expect(message.content).toContain('changed_files')
   })
 })

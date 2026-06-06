@@ -7,12 +7,13 @@ import type { GuardConfig, RuntimeConfig, ResolvedGuardPolicy } from '../src/typ
 const mockRuntime: RuntimeConfig = {
   model: 'mock',
   provider: 'mock',
-  max_iterations: 1,
+  concurrency: 4,
 }
 
 const mockGuardConfig: GuardConfig = {
   severity_threshold: 'info',
   include: [],
+  dependencies: [],
 }
 
 const policy: ResolvedGuardPolicy = {
@@ -25,7 +26,7 @@ describe('createModel', () => {
   it('returns a faux model that passes clean text and can be cleaned up', async () => {
     const handle = createModel(mockRuntime)
     try {
-      const result = await runGuardAgent(policy, { mode: 'stdin', files: [], raw: 'const x = 1' }, mockRuntime, handle.model)
+      const result = await runGuardAgent(policy, { mode: 'stdin', files: [], raw: 'const x = 1' }, handle.model)
       expect(result).toEqual({ summary: 'No policy violations found.', findings: [], passed: true })
     } finally {
       handle.cleanup()
@@ -62,10 +63,23 @@ describe('createModel', () => {
         mode: 'stdin',
         files: [],
         raw: 'const key = TODO_SECRET\nconsole.log(secret)\ntry { x() } catch (e) {}',
-      }, mockRuntime, handle.model)
+      }, handle.model)
       expect(result.summary).toBe('Found 3 issue(s).')
       expect(result.findings.map((finding) => finding.rule)).toEqual(['secret-leak', 'secret-leak', 'empty-catch'])
+      expect(result.findings.map((finding) => finding.score)).toEqual([100, 100, 90])
       expect(result.passed).toBe(false)
+    } finally {
+      handle.cleanup()
+    }
+  })
+
+  it('summarizes empty target content in mock mode', async () => {
+    const handle = createModel(mockRuntime)
+    try {
+      const result = await completeSimple(handle.model, {
+        messages: [{ role: 'user', content: 'Summarize the target content\n\n=== Content ===\n', timestamp: 1 }],
+      })
+      expect(result.content[0]).toMatchObject({ type: 'text', text: expect.stringContaining('No target content was provided.') })
     } finally {
       handle.cleanup()
     }
@@ -77,7 +91,7 @@ describe('createModel', () => {
       const result = await runGuardAgent({
         ...policy,
         content: '# Policy\nDo not leave TODO_SECRET markers in committed code.',
-      }, { mode: 'stdin', files: [], raw: 'const x = 1' }, mockRuntime, handle.model)
+      }, { mode: 'stdin', files: [], raw: 'const x = 1' }, handle.model)
       expect(result.passed).toBe(true)
     } finally {
       handle.cleanup()

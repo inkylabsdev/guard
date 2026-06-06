@@ -9,23 +9,23 @@ describe('computeExitCode', () => {
   })
 
   it('returns 1 for info finding when threshold is info', () => {
-    expect(computeExitCode([{ severity: 'info', message: 'x' }], 'info')).toBe(1)
+    expect(computeExitCode([{ severity: 'info', score: 90, message: 'x' }], 'info')).toBe(1)
   })
 
   it('returns 0 for info finding when threshold is warning', () => {
-    expect(computeExitCode([{ severity: 'info', message: 'x' }], 'warning')).toBe(0)
+    expect(computeExitCode([{ severity: 'info', score: 90, message: 'x' }], 'warning')).toBe(0)
   })
 
   it('returns 1 for warning when threshold is warning', () => {
-    expect(computeExitCode([{ severity: 'warning', message: 'x' }], 'warning')).toBe(1)
+    expect(computeExitCode([{ severity: 'warning', score: 90, message: 'x' }], 'warning')).toBe(1)
   })
 
   it('returns 0 for warning when threshold is error', () => {
-    expect(computeExitCode([{ severity: 'warning', message: 'x' }], 'error')).toBe(0)
+    expect(computeExitCode([{ severity: 'warning', score: 90, message: 'x' }], 'error')).toBe(0)
   })
 
   it('returns 1 for error when threshold is error', () => {
-    expect(computeExitCode([{ severity: 'error', message: 'x' }], 'error')).toBe(1)
+    expect(computeExitCode([{ severity: 'error', score: 90, message: 'x' }], 'error')).toBe(1)
   })
 })
 
@@ -33,9 +33,9 @@ describe('computePackageExitCode', () => {
   it('returns 2 when any rule errors', () => {
     const result: PackageEvalResult = {
       summary: 'error',
-      findings: [{ severity: 'error', message: 'x' }],
+      findings: [{ severity: 'error', score: 90, message: 'x' }],
       passed: false,
-      ruleResults: [{ rule_id: 'a', status: 'error', findings: [], summary: 'failed' }],
+      ruleResults: [{ rule_id: 'a', status: 'error', findings: [], filtered_findings: 0, summary: 'failed' }],
     }
     expect(computePackageExitCode(result, 'info')).toBe(2)
   })
@@ -43,9 +43,9 @@ describe('computePackageExitCode', () => {
   it('uses finding threshold when no rules error', () => {
     const result: PackageEvalResult = {
       summary: 'fail',
-      findings: [{ severity: 'warning', message: 'x' }],
+      findings: [{ severity: 'warning', score: 90, message: 'x' }],
       passed: false,
-      ruleResults: [{ rule_id: 'a', status: 'fail', findings: [{ severity: 'warning', message: 'x' }], summary: 'failed' }],
+      ruleResults: [{ rule_id: 'a', status: 'fail', findings: [{ severity: 'warning', score: 90, message: 'x' }], filtered_findings: 0, summary: 'failed' }],
     }
     expect(computePackageExitCode(result, 'error')).toBe(0)
     expect(computePackageExitCode(result, 'warning')).toBe(1)
@@ -65,13 +65,14 @@ describe('formatReport', () => {
   it('shows FAIL and findings', () => {
     const result: GuardEvalResult = {
       summary: 'found issues',
-      findings: [{ severity: 'error', rule: 'secret-leak', message: 'Do not log secrets.', evidence: 'console.log(secret)' }],
+      findings: [{ severity: 'error', score: 92, rule: 'secret-leak', message: 'Do not log secrets.', evidence: 'console.log(secret)' }],
       passed: false,
     }
     const target: GuardTarget = { mode: 'files', files: [] }
     const report = formatReport(result, target, '/repo/GUARD.md')
     expect(report).toContain('FAIL')
     expect(report).toContain('ERROR')
+    expect(report).toContain('score=92')
     expect(report).toContain('secret-leak')
     expect(report).toContain('Do not log secrets.')
     expect(report).toContain('console.log(secret)')
@@ -97,6 +98,7 @@ describe('formatReport', () => {
       summary: 'issues',
       findings: [{
         severity: 'warning',
+        score: 88,
         rule: 'empty-catch',
         file: 'src/foo.ts',
         line: 42,
@@ -117,10 +119,10 @@ describe('formatReport', () => {
     const result: GuardEvalResult = {
       summary: 'issues',
       findings: [
-        { severity: 'error', message: 'e1' },
-        { severity: 'warning', message: 'w1' },
-        { severity: 'info', message: 'i1' },
-        { severity: 'info', message: 'i2' },
+        { severity: 'error', score: 90, message: 'e1' },
+        { severity: 'warning', score: 90, message: 'w1' },
+        { severity: 'info', score: 90, message: 'i1' },
+        { severity: 'info', score: 90, message: 'i2' },
       ],
       passed: false,
     }
@@ -137,8 +139,8 @@ describe('formatPackageReport', () => {
       findings: [],
       passed: false,
       ruleResults: [
-        { rule_id: 'base', status: 'error', findings: [], summary: 'script failed' },
-        { rule_id: 'child', status: 'abort', findings: [], summary: 'dependency failed' },
+        { rule_id: 'base', status: 'error', findings: [], filtered_findings: 0, summary: 'script failed' },
+        { rule_id: 'child', status: 'abort', findings: [], filtered_findings: 0, summary: 'dependency failed' },
       ],
     }
     const target: GuardTarget = { mode: 'files', files: [] }
