@@ -34,6 +34,47 @@ guard check @changed-files.txt      # check files listed in a text file
 cat test-output.txt | guard check --stdin  # check arbitrary stdin text
 ```
 
+## Provider setup
+
+The default provider is `faux`, which uses deterministic local checks and does not call an LLM. It needs no API key:
+
+```bash
+guard check src/
+```
+
+To use a real provider, set that provider's API key in the environment, then select the provider and model with CLI flags or `GUARD_PROVIDER` / `GUARD_MODEL`.
+
+Supported providers are `faux` plus the text-model providers known to pi-ai.
+
+```bash
+OPENAI_API_KEY=<key> guard check --provider openai --model gpt-4o src/
+ANTHROPIC_API_KEY=<key> guard check --provider anthropic --model claude-sonnet-4-5 src/
+MISTRAL_API_KEY=<key> guard check --provider mistral --model codestral-latest src/
+```
+
+Equivalent environment-variable form:
+
+```bash
+export OPENAI_API_KEY=<key>
+export GUARD_PROVIDER=openai
+export GUARD_MODEL=gpt-4o
+guard check src/
+```
+
+`guard` does not manage provider login. It passes the selected provider and model to pi-ai, and pi-ai reads credentials from the provider's environment variables. Common pi-ai credential variables include:
+
+| Provider | Credential environment variable |
+|---|---|
+| `openai` | `OPENAI_API_KEY` |
+| `anthropic` | `ANTHROPIC_API_KEY` or `ANTHROPIC_OAUTH_TOKEN` |
+| `google` | `GEMINI_API_KEY` |
+| `google-vertex` | `GOOGLE_CLOUD_API_KEY`, or Google ADC with `GOOGLE_CLOUD_PROJECT` and `GOOGLE_CLOUD_LOCATION` |
+| `mistral` | `MISTRAL_API_KEY` |
+| `groq` | `GROQ_API_KEY` |
+| `openrouter` | `OPENROUTER_API_KEY` |
+| `together` | `TOGETHER_API_KEY` |
+| `amazon-bedrock` | AWS credentials such as `AWS_PROFILE` or `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` |
+
 ## GUARD.md format
 
 Place a `GUARD.md` in your repo root (guard walks up from cwd to find it).
@@ -94,7 +135,7 @@ Fetches from `https://raw.githubusercontent.com/{owner}/{repo}/{ref}/{path}`. On
 
 ## Current limitations
 
-The default `mock` provider uses simple keyword checks and does not call any LLM. This is intentional so guard works without API keys. Real providers (OpenAI, Anthropic) will be added as plugins.
+The default `faux` provider uses simple keyword checks and does not call any LLM. For real providers, `guard` relies on pi-ai's provider catalog and credential handling.
 
 ## Examples
 

@@ -1,10 +1,12 @@
 import {
   fauxAssistantMessage,
   getModel,
+  getProviders,
   registerFauxProvider,
   type Api,
   type Context,
   type FauxResponseFactory,
+  type KnownProvider,
   type Model,
 } from '@earendil-works/pi-ai'
 import type { RuntimeConfig, GuardFinding, GuardEvalResult } from '../types.js'
@@ -38,7 +40,7 @@ function extractTargetText(context: Context): string {
   return extractText(context)
 }
 
-function evaluateMockText(text: string): GuardEvalResult {
+function evaluateFauxText(text: string): GuardEvalResult {
   const findings: GuardFinding[] = []
 
   if (/TODO_SECRET/.test(text)) {
@@ -82,7 +84,7 @@ function evaluateMockText(text: string): GuardEvalResult {
   }
 }
 
-function summarizeMockText(text: string) {
+function summarizeFauxText(text: string) {
   const files = [...text.matchAll(/^=== File: (.+?) ===$/gm)].map((match) => match[1])
   return {
     changed_files: files,
@@ -91,7 +93,11 @@ function summarizeMockText(text: string) {
   }
 }
 
-function requireModel(provider: 'openai' | 'anthropic', modelId: string): Model<Api> {
+function isKnownProvider(provider: string): provider is KnownProvider {
+  return getProviders().includes(provider as KnownProvider)
+}
+
+function requireModel(provider: KnownProvider, modelId: string): Model<Api> {
   const model = getModel(provider, modelId as never)
   if (!model) {
     throw new Error(`Unknown model "${modelId}" for provider "${provider}"`)
@@ -100,13 +106,13 @@ function requireModel(provider: 'openai' | 'anthropic', modelId: string): Model<
 }
 
 export function createModel(runtime: RuntimeConfig): ModelHandle {
-  if (runtime.provider === 'mock') {
+  if (runtime.provider === 'faux') {
     const responseFactory: FauxResponseFactory = (context) => {
       const text = extractText(context)
       const target = extractTargetText(context)
       const result = text.includes('Summarize the target content')
-        ? summarizeMockText(target)
-        : evaluateMockText(target)
+        ? summarizeFauxText(target)
+        : evaluateFauxText(target)
       return fauxAssistantMessage(`\`\`\`json\n${JSON.stringify(result)}\n\`\`\``)
     }
     const registration = registerFauxProvider()
@@ -117,7 +123,7 @@ export function createModel(runtime: RuntimeConfig): ModelHandle {
     }
   }
 
-  if (runtime.provider === 'openai' || runtime.provider === 'anthropic') {
+  if (isKnownProvider(runtime.provider)) {
     return {
       model: requireModel(runtime.provider, runtime.model),
       cleanup: () => {},

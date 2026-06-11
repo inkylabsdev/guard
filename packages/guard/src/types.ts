@@ -1,3 +1,5 @@
+import type { KnownProvider } from '@earendil-works/pi-ai'
+
 export type GuardConfig = {
   severity_threshold: 'info' | 'warning' | 'error'
   include: GuardInclude[]
@@ -5,7 +7,7 @@ export type GuardConfig = {
 }
 
 export type RuntimeConfig = {
-  provider: 'openai' | 'anthropic' | 'mock'
+  provider: KnownProvider | 'faux'
   model: string
   concurrency: number
 }

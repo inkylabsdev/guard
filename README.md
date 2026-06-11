@@ -37,13 +37,21 @@ pnpm --dir packages/guard dev check --diff
 cat packages/guard/examples/test-output.txt | pnpm --dir packages/guard dev check --stdin
 ```
 
-The default provider is `mock`, so the CLI can run without API keys. Override it
-with CLI flags or environment variables:
+The default provider is `faux`, so the CLI can run without API keys. To use a
+real provider, set that provider's API key in the environment, then select the
+provider and model with CLI flags or `GUARD_PROVIDER` / `GUARD_MODEL`.
+
+Supported providers are `faux` plus the text-model providers known to pi-ai.
 
 ```bash
-GUARD_PROVIDER=openai GUARD_MODEL=<model> pnpm --dir packages/guard dev check src/
-pnpm --dir packages/guard dev check --provider anthropic --model <model> src/
+OPENAI_API_KEY=<key> GUARD_PROVIDER=openai GUARD_MODEL=gpt-4o pnpm --dir packages/guard dev check src/
+ANTHROPIC_API_KEY=<key> pnpm --dir packages/guard dev check --provider anthropic --model claude-sonnet-4-5 src/
+MISTRAL_API_KEY=<key> pnpm --dir packages/guard dev check --provider mistral --model codestral-latest src/
 ```
+
+`guard` does not manage provider login. It passes the selected provider and
+model to pi-ai, and pi-ai reads credentials from the provider's environment
+variables.
 
 ## Policy Formats
 

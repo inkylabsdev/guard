@@ -389,12 +389,12 @@ filtered_findings: 0 }`. There is no retry.
   call. If compatibility requires a transition period, keep `max_iterations`
   only for single-policy mode and mark it deprecated in help text.
 
-Existing unscored findings from old mock responses and tests must be updated.
+Existing unscored findings from old faux responses and tests must be updated.
 There is no default score because inventing one would weaken the output contract.
 
-The `createModel` mock provider currently sizes its response queue as
+The `createModel` faux provider currently sizes its response queue as
 `Array.from({ length: runtime.max_iterations }, ...)`. Under the new design,
-each rule agent is a single-shot call, so the mock queue should be refactored to
+each rule agent is a single-shot call, so the faux queue should be refactored to
 register an open-ended response factory rather than a fixed-size array. Update
 this alongside the scheduler change (Implementation Plan step 5).
 
@@ -411,7 +411,7 @@ this alongside the scheduler change (Implementation Plan step 5).
    dependent package `GUARD.md` gathering.
 5. Replace the package runner's sequential loop with package-level and rule-level
    concurrent scheduling using the DAG level algorithm. Refactor `createModel`
-   mock to use an open-ended response factory.
+   faux to use an open-ended response factory.
 6. Filter findings below score `80` before aggregating rule and package results.
 7. Update report formatting to print scores and `filtered_findings` count in
    verbose/debug mode.

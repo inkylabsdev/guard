@@ -81,12 +81,12 @@ export async function checkCommand(opts: CheckCommandOptions): Promise<void> {
     }
   }
 
-  const rawProvider = opts.provider ?? process.env['GUARD_PROVIDER'] ?? 'mock'
+  const rawProvider = opts.provider ?? process.env['GUARD_PROVIDER'] ?? 'faux'
   const concurrency = parseConcurrency()
 
   const runtime: RuntimeConfig = {
     provider: rawProvider as RuntimeConfig['provider'],
-    model: opts.model ?? process.env['GUARD_MODEL'] ?? 'mock',
+    model: opts.model ?? process.env['GUARD_MODEL'] ?? 'faux',
     concurrency,
   }
 

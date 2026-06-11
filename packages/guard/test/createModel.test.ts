@@ -5,8 +5,8 @@ import { runGuardAgent } from '../src/agent/runGuardAgent.js'
 import type { GuardConfig, RuntimeConfig, ResolvedGuardPolicy } from '../src/types.js'
 
 const mockRuntime: RuntimeConfig = {
-  model: 'mock',
-  provider: 'mock',
+  model: 'faux',
+  provider: 'faux',
   concurrency: 4,
 }
 
@@ -56,7 +56,7 @@ describe('createModel', () => {
     await expect(completeSimple(handle.model, { messages: [] })).rejects.toThrow('No API provider registered')
   })
 
-  it('uses the former mock keyword checks', async () => {
+  it('uses the faux keyword checks', async () => {
     const handle = createModel(mockRuntime)
     try {
       const result = await runGuardAgent(policy, {
@@ -73,7 +73,7 @@ describe('createModel', () => {
     }
   })
 
-  it('summarizes empty target content in mock mode', async () => {
+  it('summarizes empty target content in faux mode', async () => {
     const handle = createModel(mockRuntime)
     try {
       const result = await completeSimple(handle.model, {
@@ -107,6 +107,13 @@ describe('createModel', () => {
   it('returns a known Anthropic model', () => {
     const handle = createModel({ ...mockRuntime, provider: 'anthropic', model: 'claude-haiku-4-5' })
     expect(handle.model.id).toBe('claude-haiku-4-5')
+    handle.cleanup()
+  })
+
+  it('returns a known pi-ai provider model', () => {
+    const handle = createModel({ ...mockRuntime, provider: 'mistral', model: 'codestral-latest' })
+    expect(handle.model.id).toBe('codestral-latest')
+    expect(handle.model.provider).toBe('mistral')
     handle.cleanup()
   })
 
